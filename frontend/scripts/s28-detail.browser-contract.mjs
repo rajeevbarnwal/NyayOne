@@ -114,16 +114,16 @@ for (const width of [320,390,1440]) it(`${width}px reflow, 48px controls and ser
 }, { width }));
 
 it('a delayed S-28 removal settles S-30 after navigation and rejects an older list snapshot', () => using(async(page,s)=>{
- await page.goto(origin+'/s-30'); const saved=page.getByRole('region',{name:'Saved schools',exact:true});
- await saved.getByRole('button',{name:'View',exact:true}).click(); await ready(page);
+ await page.goto(origin+'/s-30'); const saved=page.getByRole('tabpanel');
+ await saved.getByRole('link',{name:'Synthetic Law School',exact:true}).click(); await ready(page);
  s.hold=true; await page.getByRole('button',{name:'Saved',exact:true}).press('Enter'); await held(s);
  // Expire the legacy list's documented 30-second cache in this test only.
  await page.clock.setFixedTime(new Date(Date.now()+31000));
  s.holdList=true; await page.goBack(); await saved.waitFor();
  const until=Date.now()+5000;while(!s.heldList&&Date.now()<until)await delay(10);assert.ok(s.heldList);
- await s.held.shift()(); await saved.getByRole('button',{name:'Browse schools',exact:true}).waitFor();
+ await s.held.shift()(); await saved.getByRole('link',{name:'Find schools',exact:true}).waitFor();
  await s.heldList(); await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
- assert.equal(await saved.getByRole('button',{name:'View',exact:true}).count(),0);assert.equal(s.writes.length,1);
+ assert.equal(await saved.getByRole('link',{name:'Synthetic Law School',exact:true}).count(),0);assert.equal(s.writes.length,1);
 }, {item:{...school,saved:true}}));
 // Geometry from the frozen v3.2.1.08 S-28 primitives: no reference rewrite.
 it('S-28 presentation: Follow bell matches the verified frozen SVG before and after confirmation',()=>using(async(page,s)=>{

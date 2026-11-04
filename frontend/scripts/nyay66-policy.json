@@ -14,7 +14,8 @@
   "s27": {"cache":"s27-v32108-chromium-149.0.7827.55-41104712468","manifestSha256":"fc702af18fc6ad997149669b88cae1dec2e8247beb7a4068b22c9ecccc078b44","provenanceSha256":"aee7a39dafe6fa056b0c9bfb304b0d7ccf1567ca1763ccd0b76a694bcf7b9e5f"},
   "s28": {"cache":"s28-v32108-chromium-149.0.7827.55-41323481198","manifestSha256":"0e68f61b7b664ce41375893827e9d693f516ece614ca66fb6c1318a1a1ebf513","provenanceSha256":"36a33702d2f2eeedb9be2c48c55b8b1af3ca44817996da1b9820930ec8a683b4"},
   "s29": {"cache":"s29-v32108-chromium-149.0.7827.55-41352544483","manifestSha256":"207f0d96ed928beee038f02d193a5febe3e3eae58d5f0b80a5a6af540cd6334c","provenanceSha256":"5de0808e4f1baa04f9696dd2613d04012ded898c4223118e096e1015a9969f17"},
-  "integrityApproval": {"pr":89,"commentId":6596938698,"bundleSha256":"e38f51939dbbb6c40189c8fcbfa43c8adc1f5f96d99e9e3f12761a7cbb902858"},
+  "s30": {"cache":"s30-v32108-chromium-149.0.7827.55-41593102467","manifestSha256":"f0d18bfc11a72774c2f4ddb923ed98a8f3d24c8e0beaeebbb8a12cc604079aa2","provenanceSha256":"62f4b3ce31ad66bab4d4d79c980a64929264b0f9f6a572d5deba62c23b82d9e6"},
+  "integrityApproval": {"pr":88,"commentId":6601185809,"bundleSha256":"867d426045f30a4b5ac7ad2b6dea595464b4f65a90430ec9ff291b442bee0972"},
   "enforced": ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09", "S-10", "S-11", "S-12", "S-13", "S-14", "S-15", "S-16", "S-17", "S-07-popup"],
   "exceptions": [
     {
@@ -3175,6 +3176,250 @@
       ],
       "reason": "S-29 error, desktop, light. Exact hosted live-route capture with synthetic API responses at 3f111a3f25960aa1194d5d0fb4c8711b2dd4b7ac (run 41396334302); not live-backend or independent Senior QA evidence. Identity/navigation disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Find a law school and school-detail controls use real route links rather than prototype buttons. Desktop retains functional 48px Home/Profile buttons instead of static labels, plus a semantic h2 for the visible This comparison aside. These extra controls/headings change index-based inventories without moving their visible boxes. The aside uses a server-confirmed comparison UUID and limit only after success; before that it truthfully says these appear after the server responds, rather than showing prototype cmp-4471/up to 3. Genuine HTTP 500 returns detail Internal Server Error without a backend code. Explicit owner-authorized error-card variant: retain the client-generated fallback identifier http_500 in addition to HTTP 500; it is not represented as a server-issued code. This extra line/gap makes the card 24px taller and shifts Retry 24px downward; heading and Retry dimensions remain identical. Interaction-state disclosure: meaningful focus is on the error/guard notice, with the existing visible 3px indigo outline and 3px outline offset, unlike the unfocused frozen image. This approves the visible focus state only, never focus loss or stealing. Residual matched-control geometry (live minus frozen, CSS px; includes below-fold controls): Retry [y=24]. Desktop table columns, equal-width Remove/full-width Add actions, action-icon wrappers, disclosure-arrow placement, Not provided typography and the 70px desktop Differences only card were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, reference, tolerance, enforcement or unrelated-state waiver.",
       "approvalPr": 86
+    },
+    {
+      "screen": "S-30",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "23d66ad669d8756b75e7412cfeb7b0cd72a2b8c27ace2d592a913ebcb974a07e",
+      "liveSha256": "fac94bb60e9dc8a46724e5d0dc3eb482bc0900d5c78ab98ef2b2cedd4c7686fd",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-30 loading, mobile390, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. Both genuine list GETs remain pending at capture: tab counts display an ellipsis rather than the prototype 2/2, and Compare is disabled until a saved-list response confirms eligibility. The accessible loading status/skeleton does not claim success or confirmed membership. Corresponding visible control boxes have no residual offset; desktop additional semantic/navigation controls are disclosed above. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 88
+    },
+    {
+      "screen": "S-30",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "6f72ce9d760d02d90763add5a978cf9e2205b8a92cce0d1e5d8be8ea9a3c61bb",
+      "liveSha256": "bf9cdc44265a2ad75a09c89b6f2452ca44bbca176ca656001823c1b40ad0cefd",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-30 loading, desktop, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. Desktop retains functional 48px Home/Profile buttons instead of static labels and a semantic h2 for the visible Compare saved schools aside. These extra control/heading entries change inventories, not their visible positions. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. Both genuine list GETs remain pending at capture: tab counts display an ellipsis rather than the prototype 2/2, and Compare is disabled until a saved-list response confirms eligibility. The accessible loading status/skeleton does not claim success or confirmed membership. Corresponding visible control boxes have no residual offset; desktop additional semantic/navigation controls are disclosed above. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 88
+    },
+    {
+      "screen": "S-30",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "39c19f9df857c89d8a5d292782e91c758637f5f34108155f1ab264a84f2353bb",
+      "liveSha256": "fb6b6b64344db170d6b23c9ac762dc432a9df2fe6849a33b9e9c2ccb878737a7",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-30 both, mobile390, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. Saved and Following are independent server-confirmed memberships: the synthetic Saved response contains Kaveri and Sabarmati, while Following contains Kaveri and Vindhya; the frozen example has Vindhya saved and Sabarmati followed. The Kaveri institution type includes server-provided state-established, which can wrap on mobile. Different institution names, locations, fees and entrance-exam values are rendered from those responses, not replaced with prototype values. Both list GETs have succeeded with counts 2/2; membership controls reflect those separate confirmed responses. Residual control/slot geometry (live minus frozen, CSS px; slots compare corresponding card positions even where institution identities differ): School-detail slot 1 [height=7.84375]; School-detail slot 2 [y=7.84375]; Remove/Unfollow school slot 2 [y=7.84375]. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 88
+    },
+    {
+      "screen": "S-30",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "7e165340a4aa52a222107106e4725a25f3fa1492321f495f153d7bc0f4aa0f4a",
+      "liveSha256": "137df684891bedcd53cf33d9e628c44a85fee054a2b36111fc50ab8f18120e98",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-30 both, desktop, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. Desktop retains functional 48px Home/Profile buttons instead of static labels and a semantic h2 for the visible Compare saved schools aside. These extra control/heading entries change inventories, not their visible positions. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. Saved and Following are independent server-confirmed memberships: the synthetic Saved response contains Kaveri and Sabarmati, while Following contains Kaveri and Vindhya; the frozen example has Vindhya saved and Sabarmati followed. The Kaveri institution type includes server-provided state-established, which can wrap on mobile. Different institution names, locations, fees and entrance-exam values are rendered from those responses, not replaced with prototype values. Both list GETs have succeeded with counts 2/2; membership controls reflect those separate confirmed responses. Corresponding visible control boxes have no residual offset; desktop additional semantic/navigation controls are disclosed above. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 88
+    },
+    {
+      "screen": "S-30",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "82f87541a1a108dadf87b6da42f33efe682ad986ebfa83b5e01293e76495ad8a",
+      "liveSha256": "089ec6b7ef4a033b965dbbb4a7689c3bd0bf7e7342c788114ff26d5bbc5f6e2b",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-30 following-tab, mobile390, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. Saved and Following are independent server-confirmed memberships: the synthetic Saved response contains Kaveri and Sabarmati, while Following contains Kaveri and Vindhya; the frozen example has Vindhya saved and Sabarmati followed. The Kaveri institution type includes server-provided state-established, which can wrap on mobile. Different institution names, locations, fees and entrance-exam values are rendered from those responses, not replaced with prototype values. Kaveri notification consent is on and Vindhya is off. Vindhya has null fee/exam values, shown as Fees not provided / Entrance exam not provided, not fabricated zeros or facts. The Following tab is selected and receives focus after activation. Residual control/slot geometry (live minus frozen, CSS px; slots compare corresponding card positions even where institution identities differ): School-detail slot 1 [height=7.84375]; School-detail slot 2 [y=7.84375]; Remove/Unfollow school slot 2 [y=7.84375]. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 88
+    },
+    {
+      "screen": "S-30",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "b319a63c02e597e326c3dc03590316b2b2444022e2b0b6711ce9dade0750ff61",
+      "liveSha256": "78008f56261b9b555f5ea3620fba8fe8ef346c06a90836bd10cd760583e6514e",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-30 following-tab, desktop, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. Desktop retains functional 48px Home/Profile buttons instead of static labels and a semantic h2 for the visible Compare saved schools aside. These extra control/heading entries change inventories, not their visible positions. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. Saved and Following are independent server-confirmed memberships: the synthetic Saved response contains Kaveri and Sabarmati, while Following contains Kaveri and Vindhya; the frozen example has Vindhya saved and Sabarmati followed. The Kaveri institution type includes server-provided state-established, which can wrap on mobile. Different institution names, locations, fees and entrance-exam values are rendered from those responses, not replaced with prototype values. Kaveri notification consent is on and Vindhya is off. Vindhya has null fee/exam values, shown as Fees not provided / Entrance exam not provided, not fabricated zeros or facts. The Following tab is selected and receives focus after activation. Corresponding visible control boxes have no residual offset; desktop additional semantic/navigation controls are disclosed above. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 88
+    },
+    {
+      "screen": "S-30",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "0d0a4856491c33eb769082625deba42f527b54817f4342fea726e5b7cb5409ba",
+      "liveSha256": "f57fb6637d96960caef36563a8e1546b6aba4dd06059c92b171bb1aa3640fe7c",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-30 saved-empty, mobile390, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. The successful Saved response confirms zero items while Following confirms two. The redundant mobile Compare row has been removed in code to match the frozen empty composition; desktop retains its disabled Compare control. No failed or pending response is presented as empty. Corresponding visible control boxes have no residual offset; desktop additional semantic/navigation controls are disclosed above. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 88
+    },
+    {
+      "screen": "S-30",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "c84cf43a5fe11331f88a739f5fd1fbb2250762d3100c4542c8d0c9809d376fa7",
+      "liveSha256": "ff7dafe8038a0001fb546437770ade73cd1200688b447359d4c41e6e7deeb4fd",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-30 saved-empty, desktop, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. Desktop retains functional 48px Home/Profile buttons instead of static labels and a semantic h2 for the visible Compare saved schools aside. These extra control/heading entries change inventories, not their visible positions. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. The successful Saved response confirms zero items while Following confirms two. The redundant mobile Compare row has been removed in code to match the frozen empty composition; desktop retains its disabled Compare control. No failed or pending response is presented as empty. Corresponding visible control boxes have no residual offset; desktop additional semantic/navigation controls are disclosed above. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 88
+    },
+    {
+      "screen": "S-30",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "19651a5a910ad7a45b7ef299569f5ba376a2e62ae1bebe2612d10165f614b512",
+      "liveSha256": "caab6d79ca1c88ad66e35f1c3a6a4c4b50e6b2194923060977434d1ab514bf15",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-30 followed-empty, mobile390, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. The successful Following response confirms zero items while Saved confirms two; Compare remains available for the confirmed saved pair. The Following tab is selected and receives focus after activation. Corresponding visible control boxes have no residual offset; desktop additional semantic/navigation controls are disclosed above. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 88
+    },
+    {
+      "screen": "S-30",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "7df33a3a9b42ce6f7e88b9ae6fb479dc60a0fc6a5063148ce2778a3f1449f5cb",
+      "liveSha256": "bd89e649677fbfd05653cfb6937657af1706bef9914058f07a3263aff4db225f",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-30 followed-empty, desktop, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. Desktop retains functional 48px Home/Profile buttons instead of static labels and a semantic h2 for the visible Compare saved schools aside. These extra control/heading entries change inventories, not their visible positions. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. The successful Following response confirms zero items while Saved confirms two; Compare remains available for the confirmed saved pair. The Following tab is selected and receives focus after activation. Corresponding visible control boxes have no residual offset; desktop additional semantic/navigation controls are disclosed above. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 88
+    },
+    {
+      "screen": "S-30",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "84149f98d9330ad31ababebb42cbdcc9501840b1c7f3c4c5e5a21dd4af8f7a95",
+      "liveSha256": "54728c76c1b76be2b60b072a7dc571175d0f4064609e9b0576c5cc1cd05506db",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-30 item-pending, mobile390, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. Saved and Following are independent server-confirmed memberships: the synthetic Saved response contains Kaveri and Sabarmati, while Following contains Kaveri and Vindhya; the frozen example has Vindhya saved and Sabarmati followed. The Kaveri institution type includes server-provided state-established, which can wrap on mobile. Different institution names, locations, fees and entrance-exam values are rendered from those responses, not replaced with prototype values. A genuine DELETE remains pending at capture. Last-confirmed 2/2 counts and list cards stay visible, with no optimistic removal or success. The implementation locks both Remove controls and Compare while this write owns the action lock; the frozen example disables only the first Remove. aria-disabled retains meaningful focus on the initiating Remove control. Its visible focus treatment is an explicitly disclosed interaction-state difference, never a focus-loss waiver. Residual control/slot geometry (live minus frozen, CSS px; slots compare corresponding card positions even where institution identities differ): School-detail slot 1 [height=7.84375]; School-detail slot 2 [y=7.84375]; Remove/Unfollow school slot 2 [y=7.84375]. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 88
+    },
+    {
+      "screen": "S-30",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "c4dcff6df30d70353f93709c78e908474f5636420a67e416ca7522aa72883851",
+      "liveSha256": "8b167bfcdde451086b2e98929b4945d7c122dd65b0a678137294b43919c762a2",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-30 item-pending, desktop, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. Desktop retains functional 48px Home/Profile buttons instead of static labels and a semantic h2 for the visible Compare saved schools aside. These extra control/heading entries change inventories, not their visible positions. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. Saved and Following are independent server-confirmed memberships: the synthetic Saved response contains Kaveri and Sabarmati, while Following contains Kaveri and Vindhya; the frozen example has Vindhya saved and Sabarmati followed. The Kaveri institution type includes server-provided state-established, which can wrap on mobile. Different institution names, locations, fees and entrance-exam values are rendered from those responses, not replaced with prototype values. A genuine DELETE remains pending at capture. Last-confirmed 2/2 counts and list cards stay visible, with no optimistic removal or success. The implementation locks both Remove controls and Compare while this write owns the action lock; the frozen example disables only the first Remove. aria-disabled retains meaningful focus on the initiating Remove control. Its visible focus treatment is an explicitly disclosed interaction-state difference, never a focus-loss waiver. Corresponding visible control boxes have no residual offset; desktop additional semantic/navigation controls are disclosed above. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 88
+    },
+    {
+      "screen": "S-30",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "8ea883b8fe4b0e86f4b6833871fbb9d8da0d9e736daa37fc266d6b77d11b8783",
+      "liveSha256": "48adcf6d820999a5a64dcc83be96ac48da2df60352f428f781bc9e771d181add",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-30 item-error, mobile390, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. Saved and Following are independent server-confirmed memberships: the synthetic Saved response contains Kaveri and Sabarmati, while Following contains Kaveri and Vindhya; the frozen example has Vindhya saved and Sabarmati followed. The Kaveri institution type includes server-provided state-established, which can wrap on mobile. Different institution names, locations, fees and entrance-exam values are rendered from those responses, not replaced with prototype values. A genuine DELETE returns HTTP 500, leaving its outcome uncertain. Explicit owner-authorized recovery design variant: retain the last-known cards, display Saved (…) until reloaded, lock both Remove controls and Compare, and show \"Could not confirm removal. This is the last known list. Reload to check the server before trying again.\" with a real Reload action. The frozen notice instead promises \"Nothing changed.\" without server confirmation. The warning triangle replaces the frozen cross icon within this explicitly disclosed recovery notice. The additional truthful notice and action increase card height and shift the next card as quantified below. Uncertain Remove controls are unselected/disabled instead of the frozen selected treatment. Meaningful focus is on the inline error notice with its visible outline; this is an explicitly disclosed interaction-state difference, not a waiver of focus behavior. Residual control/slot geometry (live minus frozen, CSS px; slots compare corresponding card positions even where institution identities differ): School-detail slot 1 [height=7.84375]; School-detail slot 2 [y=100.21875]; Remove/Unfollow school slot 2 [y=100.21875]. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 88
+    },
+    {
+      "screen": "S-30",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "7befb7a06627c660a0edc5a8f06f6d80a6033cb6081bc3764e77f5aad22a75ca",
+      "liveSha256": "2cca6d41d6c2de05b840cd678110e1732861c6cc6bf1a88d4e05da1c4239f559",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-30 item-error, desktop, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. Desktop retains functional 48px Home/Profile buttons instead of static labels and a semantic h2 for the visible Compare saved schools aside. These extra control/heading entries change inventories, not their visible positions. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. Saved and Following are independent server-confirmed memberships: the synthetic Saved response contains Kaveri and Sabarmati, while Following contains Kaveri and Vindhya; the frozen example has Vindhya saved and Sabarmati followed. The Kaveri institution type includes server-provided state-established, which can wrap on mobile. Different institution names, locations, fees and entrance-exam values are rendered from those responses, not replaced with prototype values. A genuine DELETE returns HTTP 500, leaving its outcome uncertain. Explicit owner-authorized recovery design variant: retain the last-known cards, display Saved (…) until reloaded, lock both Remove controls and Compare, and show \"Could not confirm removal. This is the last known list. Reload to check the server before trying again.\" with a real Reload action. The frozen notice instead promises \"Nothing changed.\" without server confirmation. The warning triangle replaces the frozen cross icon within this explicitly disclosed recovery notice. The additional truthful notice and action increase card height and shift the next card as quantified below. Uncertain Remove controls are unselected/disabled instead of the frozen selected treatment. Meaningful focus is on the inline error notice with its visible outline; this is an explicitly disclosed interaction-state difference, not a waiver of focus behavior. Residual control/slot geometry (live minus frozen, CSS px; slots compare corresponding card positions even where institution identities differ): School-detail slot 2 [y=56.125]; Remove/Unfollow school slot 2 [y=56.125]. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 88
+    },
+    {
+      "screen": "S-30",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "ab1f0e895a621ef31f99f946273d8770ab0c5ac6016f745028e5e61ddf5f39b1",
+      "liveSha256": "2349c4fbc2a8414be42418e7006250a27e83870be346546c67e9eb29fbf89d5f",
+      "checks": [
+        "controls",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-30 error, mobile390, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. The Saved GET genuinely returns HTTP 500; the independent Following GET succeeds with two. Saved (…) truthfully remains unknown rather than the frozen count 2, and Compare stays disabled until a successful reload. Retry and the error card retain their geometry; meaningful focus adds the visible 3px indigo outline with 3px offset around the error notice, unlike the unfocused frozen image. Corresponding visible control boxes have no residual offset; desktop additional semantic/navigation controls are disclosed above. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 88
+    },
+    {
+      "screen": "S-30",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "d7b12117d878a15b0a5c1b00d88c3e0ceb1c2146ce2fe042f1a6f4d06300b8ac",
+      "liveSha256": "c5eda282d0f6446a666c0f81e08980f3862e7f9036e66ddce1198d1ccad636a7",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-30 error, desktop, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. Desktop retains functional 48px Home/Profile buttons instead of static labels and a semantic h2 for the visible Compare saved schools aside. These extra control/heading entries change inventories, not their visible positions. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. The Saved GET genuinely returns HTTP 500; the independent Following GET succeeds with two. Saved (…) truthfully remains unknown rather than the frozen count 2, and Compare stays disabled until a successful reload. Retry and the error card retain their geometry; meaningful focus adds the visible 3px indigo outline with 3px offset around the error notice, unlike the unfocused frozen image. Corresponding visible control boxes have no residual offset; desktop additional semantic/navigation controls are disclosed above. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 88
     }
   ]
 }

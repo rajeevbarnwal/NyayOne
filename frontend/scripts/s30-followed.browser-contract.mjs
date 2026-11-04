@@ -1,0 +1,174 @@
+// Developer synthetic Chromium probes, not independent QA or conformance.
+import {before,after,it} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {setTimeout as delay} from 'node:timers/promises';
+import {preview} from 'vite';
+import {chromium} from 'playwright';
+import {actor} from './lib/nyay66-fixtures.mjs';
+let server,browser,origin;
+before(async()=>{server=await preview({preview:{host:'127.0.0.1',port:0},logLevel:'error'});origin=`http://127.0.0.1:${server.httpServer.address().port}`;browser=await chromium.launch();});
+after(async()=>{await browser?.close();await new Promise(done=>server?.httpServer.close(done));});
+const school=id=>({id,name:`Synthetic School ${id}`,slug:id,state:'Delhi',institution_type:'government',accreditation:null,entrance_exam:null,fees_min:null,fees_max:null,nirf_rank:null,notify_opt_in:id==='a',programmes:[],facts:[],saved:true,followed:true});
+async function using(run,options={}){
+ const context=await browser.newContext({viewport:{width:390,height:844},reducedMotion:'reduce'}),page=await context.newPage();page.setDefaultTimeout(5000);
+ const s={saved:['a','b'],followed:['a'],status:200,writeStatus:200,hold:false,held:[],reads:[],writes:[],unexpected:[],...options};
+ await page.route('**/*',async route=>{const r=route.request(),u=new URL(r.url());const reply=(v,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(v)}).catch(()=>{});
+  if(u.origin!==origin&&!(u.origin==='http://localhost:1131'&&u.pathname.startsWith('/api/v1/'))){s.unexpected.push(u.origin);return route.abort();}if(!u.pathname.startsWith('/api/v1/'))return route.continue();
+  if(u.pathname==='/api/v1/auth/student/session')return reply(s.signedOut?{authenticated:false,actor:null}:{authenticated:true,actor});
+  if(/\/student\/law-schools\/(saved|followed)$/.test(u.pathname)){
+   const kind=u.pathname.split('/').pop();s.reads.push(kind);const status=kind==='saved'?s.status:(s.followStatus??200);const body=status===200?{items:s[kind].map(school)}:{detail:{code:'unavailable'}};
+   const done=()=>reply(body,status);if(s.hold||s.holdList===kind){s.hold=false;s.holdList=null;s.held.push(done);return;}return done();
+  }
+  if(r.method()==='DELETE'){
+   const parts=u.pathname.split('/'),kind=parts.at(-1)==='saved'?'saved':'followed',id=decodeURIComponent(parts.at(-2));s.writes.push({kind,id});
+   const done=()=>{if(s.writeStatus===401)s.signedOut=true;if(s.writeStatus!==200)return reply({detail:{code:s.writeStatus===401?'authentication_required':'unavailable'}},s.writeStatus);s[kind]=s[kind].filter(x=>x!==id);return reply(s.malformed?{}:kind==='saved'?{saved:false}:{followed:false,notify_opt_in:false});};
+   if(s.hold){s.hold=false;s.held.push(done);return;}return done();
+  }
+  if(/^\/api\/v1\/law-schools\/[^/]+$/.test(u.pathname)){const id=u.pathname.split('/').pop(),body={...school(id),saved:s.saved.includes(id),followed:s.followed.includes(id)},done=()=>reply(body);if(s.holdDetail){s.holdDetail=false;s.held.push(done);return;}return done();}
+  s.unexpected.push(r.method()+' '+u.pathname);return route.abort();
+ });try{await run(page,s);assert.deepEqual(s.unexpected,[]);}catch(error){console.error({url:page.url(),text:(await page.locator('body').innerText()).slice(0,1400),writes:s.writes,unexpected:s.unexpected});throw error;}finally{await context.close();}
+}
+const ready=p=>p.getByRole('tab',{name:'Saved (2)',exact:true}).waitFor();
+const remove=p=>p.getByRole('button',{name:'Remove Synthetic School a from saved',exact:true});
+async function held(s){for(let i=0;!s.held.length&&i<500;i++)await delay(10);assert.ok(s.held.length);}
+it('Revision L tabs use server summaries without fabricated facts or redundant View rows',()=>using(async(p,s)=>{await p.goto(origin+'/s-30');await ready(p);await p.getByRole('heading',{name:'Saved and followed schools.',exact:true}).waitFor();assert.equal(await p.locator('main').count(),1);assert.equal(await p.locator('.ls-shell').count(),0);assert.doesNotMatch(await p.locator('main').innerText(),/sample|verified 1 Jul|View/);assert.deepEqual(s.reads.sort(),['followed','saved']);}));
+it('tabs support arrow/Home/End and keep notification consent separate',()=>using(async(p,s)=>{await p.goto(origin+'/s-30');await ready(p);const tab=p.getByRole('tab',{name:'Saved (2)',exact:true});await tab.focus();await tab.press('ArrowRight');await p.getByRole('button',{name:'Unfollow Synthetic School a',exact:true}).waitFor();assert.match(await p.getByRole('tabpanel').innerText(),/Update notifications: on/);assert.equal(s.writes.length,0);await p.getByRole('tab',{selected:true}).press('Home');assert.equal(await tab.getAttribute('aria-selected'),'true');}));
+it('Remove is server confirmed, duplicate locked, and focus survives removal',()=>using(async(p,s)=>{await p.goto(origin+'/s-30');await ready(p);s.hold=true;await remove(p).focus();await remove(p).evaluate(el=>{el.click();el.click();});await held(s);assert.equal(s.writes.length,1);assert.equal(await p.getByRole('link',{name:'Synthetic School a',exact:true}).count(),1);assert.notEqual(await p.evaluate(()=>document.activeElement.tagName),'BODY');await s.held.shift()();await p.getByRole('tab',{name:'Saved (1)',exact:true}).waitFor();assert.equal(await p.getByRole('link',{name:'Synthetic School a',exact:true}).count(),0);assert.notEqual(await p.evaluate(()=>document.activeElement.tagName),'BODY');}));
+it('uncertain removal retains last-known card, focuses error, and requires reload',()=>using(async(p,s)=>{await p.goto(origin+'/s-30');await ready(p);await remove(p).press('Enter');await p.getByRole('alert').waitFor();await p.waitForFunction(()=>document.activeElement?.getAttribute('role')==='alert');assert.match(await p.getByRole('alert').innerText(),/confirm/);assert.equal(await remove(p).getAttribute('aria-disabled'),'true');await p.getByRole('button',{name:'Reload saved list',exact:true}).press('Enter');await p.waitForFunction(()=>!document.querySelector('[role=alert]'));assert.equal(s.writes.length,1);},{writeStatus:503}));
+it('late failure does not steal focus from the other tab',()=>using(async(p,s)=>{await p.goto(origin+'/s-30');await ready(p);s.hold=true;await remove(p).press('Enter');await held(s);const tab=p.getByRole('tab',{name:'Following (1)',exact:true});await tab.focus();await s.held.shift()();await p.getByRole('alert').waitFor();assert.equal(await tab.evaluate(el=>el===document.activeElement),true);},{writeStatus:503}));
+it('a failed Saved list does not hide the working Following list; retry retains meaningful focus',()=>using(async(p,s)=>{await p.goto(origin+'/s-30');await p.getByRole('alert').waitFor();s.hold=true;await p.getByRole('button',{name:'Retry',exact:true}).press('Enter');await held(s);assert.notEqual(await p.evaluate(()=>document.activeElement.tagName),'BODY');await s.held.shift()();await p.waitForFunction(()=>document.activeElement?.getAttribute('role')==='alert');await p.getByRole('tab',{name:'Following (1)',exact:true}).click();await p.getByRole('button',{name:'Unfollow Synthetic School a',exact:true}).waitFor();},{status:503}));
+it('Unfollow removes only following membership after confirmation',()=>using(async(p,s)=>{await p.goto(origin+'/s-30');await ready(p);await p.getByRole('tab',{name:'Following (1)',exact:true}).click();await p.getByRole('button',{name:'Unfollow Synthetic School a',exact:true}).press('Enter');await p.getByRole('heading',{name:'You are not following any school.',exact:true}).waitFor();await p.getByRole('tab',{name:'Saved (2)',exact:true}).click();await remove(p).waitFor();assert.deepEqual(s.writes,[{kind:'followed',id:'a'}]);}));
+it('empty lists and 320px reflow retain touch targets and axe checks',()=>using(async(p)=>{await p.setViewportSize({width:320,height:844});await p.goto(origin+'/s-30');await p.getByRole('heading',{name:'No saved schools.',exact:true}).waitFor();assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);for(const tab of await p.getByRole('tab').all())assert.ok((await tab.boundingBox()).height>=48);await p.addScriptTag({content:await readFile('node_modules/axe-core/axe.min.js','utf8')});assert.deepEqual(await p.evaluate(async()=>(await window.axe.run()).violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>v.id)),[]);},{saved:[],followed:[]}));
+it('real typed 401 hides private data and retains the existing sign-in redirect without repeated mutation',()=>using(async(p,s)=>{await p.goto(origin+'/s-30');await ready(p);await remove(p).press('Enter');await p.waitForURL(/\/s-03/);assert.equal(await p.getByRole('link',{name:'Synthetic School a',exact:true}).count(),0);assert.equal(s.writes.length,1);},{writeStatus:401}));
+it('after removal, the S-28 destination refetches and shows Save rather than stale Saved',()=>using(async(p,s)=>{await p.goto(origin+'/s-28?id=a&from=s30');await p.getByRole('button',{name:'Saved',exact:true}).waitFor();await p.getByRole('link',{name:'Saved and followed',exact:true}).click();await ready(p);await remove(p).click();await p.getByRole('tab',{name:'Saved (1)',exact:true}).waitFor();await p.getByRole('tab',{name:'Following (1)',exact:true}).click();await p.getByRole('link',{name:'Synthetic School a',exact:true}).click();await p.getByRole('button',{name:'Save',exact:true}).waitFor();assert.equal(new URL(p.url()).searchParams.get('from'),'s30');assert.equal(s.saved.includes('a'),false);}));
+
+it('malformed success cannot claim removal or silently enable another write',()=>using(async(p,s)=>{await p.goto(origin+'/s-30');await ready(p);await remove(p).press('Enter');await p.getByRole('alert').waitFor();assert.equal(await remove(p).count(),1);assert.equal(await remove(p).getAttribute('aria-disabled'),'true');assert.match(await p.getByRole('alert').innerText(),/last known list/);assert.equal(s.writes.length,1);},{malformed:true}));
+it('offline removal sends no request and keeps the confirmed membership',()=>using(async(p,s)=>{await p.goto(origin+'/s-30');await ready(p);await p.context().setOffline(true);await remove(p).press('Enter');await p.getByRole('alert').waitFor();assert.match(await p.getByRole('alert').innerText(),/No request was sent/);assert.equal(s.writes.length,0);assert.equal(await remove(p).count(),1);assert.equal(await remove(p).getAttribute('aria-disabled'),'false');}));
+it('comparison needs two confirmed schools and never silently truncates an over-limit saved list',()=>using(async(p)=>{await p.goto(origin+'/s-30');await p.getByRole('tab',{name:'Saved (5)',exact:true}).waitFor();assert.equal(await p.getByRole('button',{name:'Compare saved schools',exact:true}).isDisabled(),true);assert.equal(await p.getByRole('link',{name:/Synthetic School/}).count(),5);},{saved:['a','b','c','d','e']}));
+it('mobile compare action precedes the tabs and saved controls use the frozen bookmark token',()=>using(async(p)=>{await p.goto(origin+'/s-30');await ready(p);const compare=p.getByRole('button',{name:'Compare saved schools',exact:true}),tabs=p.getByRole('tablist');assert.ok((await compare.boundingBox()).y<(await tabs.boundingBox()).y,'the mobile comparison route belongs before the tabs');}));
+it('saved control uses the frozen filled bookmark and selected circle',()=>using(async(p)=>{await p.goto(origin+'/s-30');await ready(p);const style=await remove(p).evaluate(el=>({radius:getComputedStyle(el).borderRadius,bg:getComputedStyle(el).backgroundColor,fill:el.querySelector('path')?.getAttribute('fill'),path:el.querySelector('path')?.getAttribute('d')}));assert.deepEqual(style,{radius:'50%',bg:'rgb(246, 237, 218)',fill:'currentColor',path:'M7 4h10v17l-5-3.5L7 21z'});}));
+
+it('confirmed empty Saved omits only the mobile Compare row and preserves desktop recovery',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-30');await p.getByRole('heading',{name:'No saved schools.',exact:true}).waitFor();
+ const mobile=p.locator('main .s20-related'),desktop=p.locator('aside').getByRole('button',{name:'Compare saved schools',exact:true});
+ assert.equal(await mobile.isVisible(),false,'a confirmed empty Saved list must not add the 61px mobile Compare row');
+ const tab=await p.getByRole('tablist').boundingBox();assert.equal(tab.y,174.84375,'tabs retain the frozen empty-state fold placement');
+ await p.setViewportSize({width:1440,height:1024});assert.equal(await desktop.isVisible(),true);assert.equal(await desktop.isDisabled(),true);
+ assert.deepEqual(s.reads.sort(),['followed','saved']);assert.equal(s.writes.length,0);
+},{saved:[]}));
+it('unconfirmed or failed Saved reads retain the disabled mobile Compare control',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-30');await held(s);
+ const compare=p.locator('main .s20-related').getByRole('button',{name:'Compare saved schools',exact:true});
+ assert.equal(await compare.isVisible(),true);assert.equal(await compare.isDisabled(),true);
+ await s.held.shift()();await p.getByRole('alert').waitFor();assert.equal(await compare.isVisible(),true);assert.equal(await compare.isDisabled(),true);
+},{saved:[],hold:true,status:503}));
+it('Compare icon uses the frozen 18px glyph baseline at both viewports',()=>using(async(p)=>{
+ await p.goto(origin+'/s-30');await ready(p);
+ for(const viewport of [{width:390,height:844},{width:1440,height:1024}]){
+  await p.setViewportSize(viewport);const button=p.getByRole('button',{name:'Compare saved schools',exact:true});
+  const box=await button.boundingBox(),icon=await button.locator('svg').boundingBox();
+  assert.equal(icon.width,18);assert.equal(icon.height,18);assert.equal(icon.y-box.y,14,'frozen nested icon wrapper sits one pixel above the flex-centred baseline');
+ }
+}));
+it('Find schools uses the frozen separate outline and round-capped building strokes',()=>using(async(p)=>{
+ await p.goto(origin+'/s-30');await p.getByRole('heading',{name:'No saved schools.',exact:true}).waitFor();
+ const icon=p.getByRole('link',{name:'Find schools',exact:true}).locator('svg');
+ assert.equal(await icon.locator('path').count(),3);
+ assert.equal(await icon.locator('path').nth(1).getAttribute('stroke-linejoin'),'round');
+ assert.equal(await icon.locator('path').nth(2).getAttribute('stroke-linecap'),'round');
+ assert.equal(await icon.locator('path').nth(2).getAttribute('d'),'M6.5 11.5v4.5c0 1.5 2.5 3 5.5 3s5.5-1.5 5.5-3v-4.5M21 9.5v5');
+},{saved:[]}));
+
+// Independent-QA regression boundaries: real product routes, synthetic backend.
+for(const kind of ['saved','followed'])it(`F1 ${kind}: offline Retry replaces stale HTTP text and recovers online without stealing focus`,()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-30');
+ if(kind==='followed'){await ready(p);await p.getByRole('tab',{name:'Following (…)',exact:true}).click();}
+ await p.getByRole('alert').waitFor();assert.match(await p.getByRole('alert').innerText(),/HTTP 503/);
+ const reads=s.reads.length;await p.context().setOffline(true);
+ await p.getByRole('button',{name:'Retry',exact:true}).press('Enter');
+ await p.waitForFunction(()=>document.querySelector('[role=alert]')?.textContent.includes('You are offline. No request was sent.'));
+ assert.equal(s.reads.length,reads);assert.doesNotMatch(await p.getByRole('alert').innerText(),/HTTP 503/);
+ assert.equal(await p.getByRole('alert').evaluate(el=>el===document.activeElement),true);
+ await p.getByRole('button',{name:'Retry',exact:true}).press('Enter');assert.equal(s.reads.length,reads);
+ await p.context().setOffline(false);s.status=200;s.followStatus=200;s.holdList=kind;
+ await p.getByRole('button',{name:'Retry',exact:true}).press('Enter');await held(s);
+ const other=p.getByRole('tab').filter({hasText:kind==='saved'?'Following':'Saved'});await other.focus();
+ await s.held.shift()();await p.getByRole('button',{name:kind==='saved'?'Remove Synthetic School a from saved':'Unfollow Synthetic School a',exact:true}).waitFor();
+ assert.equal(await p.getByRole('alert').count(),0);assert.equal(await other.evaluate(el=>el===document.activeElement),true);
+},{status:kind==='saved'?503:200,followStatus:kind==='followed'?503:200}));
+for(const kind of ['saved','followed'])it(`F2 S-28 → S-30: confirmed ${kind} removal is synchronized before a held refetch`,()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-30');await ready(p);await p.getByRole('link',{name:'Synthetic School a',exact:true}).click();
+ const button=p.getByRole('button',{name:kind==='saved'?'Saved':'Following',exact:true});await button.waitFor();
+ s.hold=true;await button.press('Enter');await held(s);
+ assert.equal(s[kind].includes('a'),true,'no optimistic removal before server confirmation');await s.held.shift()();
+ await p.getByRole('button',{name:kind==='saved'?'Save':'Follow',exact:true}).waitFor();
+ s.holdList=kind;await p.getByRole('link',{name:'Saved and followed',exact:true}).click();await held(s);
+ if(kind==='followed')await p.getByRole('tab').filter({hasText:'Following'}).click();
+ assert.equal(await p.getByRole('link',{name:'Synthetic School a',exact:true}).count(),0,'confirmed removal must not reappear during reconciliation');
+ assert.doesNotMatch(await p.getByRole('tab').filter({hasText:kind==='saved'?'Saved':'Following'}).innerText(),kind==='saved'?/Saved \(2\)/:/Following \(1\)/);
+ await s.held.shift()();await p.getByRole('tab',{name:kind==='saved'?'Saved (1)':'Following (0)',exact:true}).waitFor();
+ assert.equal(s[kind].includes('a'),false);assert.equal(s[kind==='saved'?'followed':'saved'].includes('a'),true);
+}));
+for(const kind of ['saved','followed'])it(`F2 S-30 → S-28: confirmed ${kind} removal updates cached detail while GET is held`,()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-28?id=a&from=s30');await p.getByRole('button',{name:'Saved',exact:true}).waitFor();
+ await p.getByRole('link',{name:'Saved and followed',exact:true}).click();await ready(p);
+ if(kind==='followed')await p.getByRole('tab',{name:'Following (1)',exact:true}).click();
+ await p.getByRole('button',{name:kind==='saved'?'Remove Synthetic School a from saved':'Unfollow Synthetic School a',exact:true}).click();
+ await p.getByRole('tab',{name:kind==='saved'?'Saved (1)':'Following (0)',exact:true}).waitFor();
+ await p.getByRole('tab').filter({hasText:kind==='saved'?'Following':'Saved'}).click();s.holdDetail=true;
+ await p.getByRole('link',{name:'Synthetic School a',exact:true}).click();await held(s);
+ const changed=p.getByRole('button',{name:kind==='saved'?'Save':'Follow',exact:true});
+ assert.equal(await changed.count(),1,'cached detail must reflect server-confirmed removal before its GET completes');
+ assert.equal(await changed.getAttribute('aria-pressed'),'false');
+ assert.equal(await p.getByRole('button',{name:kind==='saved'?'Following':'Saved',exact:true}).getAttribute('aria-pressed'),'true');
+ await s.held.shift()();assert.equal(s[kind].includes('a'),false);
+}));
+for(const count of [1,5])it(`F3 mobile Compare explains disabled state for ${count} schools, including accessible description`,()=>using(async(p)=>{
+ await p.goto(origin+'/s-30');await p.getByRole('tab',{name:`Saved (${count})`,exact:true}).waitFor();
+ const compare=p.getByRole('button',{name:'Compare saved schools',exact:true});assert.equal(await compare.isDisabled(),true);
+ const id=await compare.getAttribute('aria-describedby');assert.ok(id,'disabled control must point to the visible reason');
+ const reason=p.locator(`#${id}`);assert.equal(await reason.isVisible(),true);
+ assert.match(await reason.innerText(),count===1?/at least 2/i:/up to 4/i);
+ await p.setViewportSize({width:320,height:844});assert.equal(await reason.isVisible(),true);
+ assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+},{saved:Array.from({length:count},(_,i)=>String.fromCharCode(97+i))}));
+
+// Round 2 independent QA R2-N1: an automatic read supersedes an offline Retry.
+for(const kind of ['saved','followed'])for(const outcome of [200,503])it(`R2-N1 ${kind}: automatic refetch ${outcome} replaces offline feedback without stealing focus`,()=>using(async(p,s)=>{
+ const label=kind==='saved'?'Saved':'Following',otherLabel=kind==='saved'?'Following':'Saved';
+ await p.goto(origin+'/s-30');
+ if(kind==='followed')await p.getByRole('tab').filter({hasText:label}).click();
+ await p.getByRole('alert').waitFor();assert.match(await p.getByRole('alert').innerText(),/HTTP 503/);
+ await p.context().setOffline(true);const before=s.reads.filter(k=>k===kind).length;
+ await p.getByRole('button',{name:'Retry',exact:true}).press('Enter');
+ await p.waitForFunction(()=>document.querySelector('[role=alert]')?.textContent.includes('No request was sent'));
+ assert.equal(s.reads.filter(k=>k===kind).length,before,'offline Retry must not send a request');
+ await p.context().setOffline(false);
+ if(kind==='saved')s.status=outcome;else s.followStatus=outcome;
+ s.holdList=kind;
+ await p.getByRole('tab').filter({hasText:otherLabel}).click();
+ await p.getByRole('button',{name:kind==='saved'?'Unfollow Synthetic School a':'Remove Synthetic School a from saved',exact:true}).press('Enter');
+ await held(s);assert.equal(s.reads.filter(k=>k===kind).length,before+1,'the other-list removal must cause a real automatic read');
+ const target=p.getByRole('tab').filter({hasText:label});await target.click();await target.focus();
+ assert.doesNotMatch(await p.getByRole('tabpanel').innerText(),/You are offline|No request was sent/,'actual online fetch must supersede the no-request claim while pending');
+ await s.held.shift()();
+ if(outcome===200){await p.getByRole('link',{name:'Synthetic School a',exact:true}).waitFor();assert.equal(await p.getByRole('alert').count(),0,'successful automatic read must remove stale offline alert');}
+ else{await p.waitForFunction(()=>document.querySelector('[role=alert]')?.textContent.includes('HTTP 503'));assert.doesNotMatch(await p.getByRole('alert').innerText(),/No request was sent|You are offline/);}
+ assert.equal(await target.evaluate(el=>el===document.activeElement),true,'background settlement must not steal focus');
+ assert.equal(s.reads.filter(k=>k===kind).length,before+1);assert.equal(s.writes.length,1);
+ assert.equal(s[kind].includes('a'),true,'reading one list must not change its membership');
+},{status:kind==='saved'?503:200,followStatus:kind==='followed'?503:200}));
+
+it('R2-N1 read-feedback cleanup preserves an uncertain-removal lock until successful reconciliation',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-30');await ready(p);await remove(p).press('Enter');await p.getByRole('alert').waitFor();
+ assert.equal(await remove(p).getAttribute('aria-disabled'),'true');
+ await p.context().setOffline(true);await p.getByRole('button',{name:'Reload saved list',exact:true}).press('Enter');
+ await p.waitForFunction(()=>document.querySelector('[role=alert]')?.textContent.includes('No request was sent'));
+ await p.context().setOffline(false);s.status=503;
+ await p.getByRole('button',{name:'Reload saved list',exact:true}).press('Enter');
+ await p.waitForFunction(()=>document.querySelector('[role=alert]')?.textContent.includes('HTTP 503'));
+ assert.equal(s.writes.length,1);assert.equal(await p.getByRole('tab').filter({hasText:'Saved'}).innerText(),'Saved (…)');
+ s.status=200;await p.getByRole('button',{name:'Retry',exact:true}).press('Enter');await ready(p);
+ assert.equal(await p.getByRole('alert').count(),0);assert.equal(await remove(p).getAttribute('aria-disabled'),'false');assert.equal(s.writes.length,1);
+},{writeStatus:503}));

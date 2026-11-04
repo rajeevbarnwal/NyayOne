@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "source_inventory_sha256": "07d5daf475b2952928c08fac656fa80adc8d6b06c600cb61036bee0e8c5d066d",
+  "source_inventory_sha256": "d7db9304e4e66744c7add9f4ea035548f7f6731a07f54aebc392fecb09d43cc0",
   "metadata": {
     "package_name": "nyayone-frontend",
     "capacitor_app_id": "com.nyayone.app",
@@ -18,7 +18,7 @@
     "nyayone-clinical-hours-": 1,
     "nyayone-credential-qr.png": 1,
     "nyayone-frontend": 3,
-    "nyayone-mark.svg": 19,
+    "nyayone-mark.svg": 20,
     "nyayone-shell-": 2,
     "nyayone-shell-v1": 1,
     "nyayone.app": 1,

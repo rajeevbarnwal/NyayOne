@@ -91,7 +91,7 @@ describe('S-29 archive import fails closed before writing',()=>{
     const before=JSON.parse(beforeBytes),current={...structuredClone(policy),exceptions:withoutS29ProposalsForTest(policy.exceptions)};
     expect(current.exceptions).toHaveLength(204);
     expect(currentBytes.slice(currentBytes.indexOf('  "exceptions": ['))).toBe(beforeBytes.slice(beforeBytes.indexOf('  "exceptions": [')));
-    delete current.s29;delete current.integrityApproval;delete before.integrityApproval;
+    expect(current.s30).toEqual({"cache":"s30-v32108-chromium-149.0.7827.55-41593102467","manifestSha256":"f0d18bfc11a72774c2f4ddb923ed98a8f3d24c8e0beaeebbb8a12cc604079aa2","provenanceSha256":"62f4b3ce31ad66bab4d4d79c980a64929264b0f9f6a572d5deba62c23b82d9e6"});delete current.s30;delete current.s29;delete current.integrityApproval;delete before.integrityApproval;
     expect(current).toEqual(before);
     const rows=continuationRows(data).filter(r=>r.screen==='S-29');
     expect(rows).toHaveLength(12);
