@@ -43,6 +43,15 @@ it('Revision L discovery shows server price, ratings and separate verified claim
  assert.match(await cards(p).innerText(),/₹899.50 per session/);assert.match(await cards(p).innerText(),/4.80.*31/);assert.match(await cards(p).innerText(),/Identity verified/);assert.doesNotMatch(await cards(p).innerText(),/Credentials verified|Next available|60 min|free cancellation/);
  assert.equal(s.reads.length,1);assert.equal(await p.getByRole('link',{name:/Synthetic Mentor a/}).getAttribute('href'),'/s-32?tutor=a');
 }));
+for (const width of [390, 1440]) {
+ for (const [rating_count, rating_avg, expected] of [[0, '0.00', 'No ratings yet'], [1, '5.00', '5.00 from 1 rating'], [2, '4.50', '4.50 from 2 ratings'], [31, '4.80', '4.80 from 31 ratings'], [1, null, 'No ratings yet']]) {
+  it(`QA-S31-01 ${width}: rating count ${rating_count}, average ${rating_avg} uses truthful singular/plural copy`,()=>using(async(p,s)=>{
+   await p.setViewportSize({width,height:1024});await p.goto(origin+'/s-31');await ready(p);
+   assert.equal(await cards(p).locator('[data-experience-years]').innerText(),`5 years · ${expected}`);
+   assert.equal(s.reads.length,1);assert.equal(await cards(p).getByRole('link').getAttribute('href'),'/s-32?tutor=a');
+  },{items:[{...tutor(),rating_count,rating_avg}]}));
+ }
+}
 it('search/filters/sort are server-side, reset offset, and restore drafts with Back',()=>using(async(p,s)=>{
  await p.goto(origin+'/s-31?offset=10');await ready(p);await p.getByText('Filters and sort',{exact:true}).click();
  await p.getByRole('searchbox',{name:'Search mentors',exact:true}).fill('Arbitration');await p.getByLabel('Subject',{exact:true}).fill('Custom subject');await p.getByLabel('Level',{exact:true}).fill('Advanced');
