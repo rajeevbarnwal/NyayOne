@@ -20,7 +20,7 @@
     "manifestSha256": "d16430a6a405418f506085111e4486741ba0d46aa25e7ad32fcc937d3f1778d9",
     "provenanceSha256": "cef8aedce696d134f8cdbff97a024bdd7d412a5a5441e14c809f31533326ae07"
   },
-  "integrityApproval": {"pr":90,"commentId":6628112837,"bundleSha256":"b0bbbf1cf1f0a8f19a7f91ad349579a209f92584375343d9de3776af06127c9e"},
+  "integrityApproval": {"pr":90,"commentId":6636858006,"bundleSha256":"ffa0e8a54fc712e6b09b7c1728d0839d9e6a10ffa709c2f8c60585ae42db3ec8"},
   "enforced": ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09", "S-10", "S-11", "S-12", "S-13", "S-14", "S-15", "S-16", "S-17", "S-07-popup"],
   "exceptions": [
     {
