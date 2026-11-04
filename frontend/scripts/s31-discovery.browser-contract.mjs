@@ -1,0 +1,87 @@
+// Synthetic developer browser regressions. Not conformance or independent QA.
+import {before,after,it} from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
+import {setTimeout as delay} from 'node:timers/promises';
+import {preview} from 'vite';
+import {chromium} from 'playwright';
+import {actor} from './lib/nyay66-fixtures.mjs';
+let server,browser,origin;
+before(async()=>{server=await preview({build:{outDir:process.env.S31_BASE_DIST??'dist'},preview:{host:'127.0.0.1',port:0},logLevel:'error'});origin=`http://127.0.0.1:${server.httpServer.address().port}`;browser=await chromium.launch();});
+after(async()=>{await browser?.close();await new Promise(done=>server?.httpServer.close(done));});
+const tutor=(id='a')=>({id,display_name:`Synthetic Mentor ${id}`,headline:'Moot court',experience_years:5,rating_avg:'4.80',rating_count:31,verified_identity:true,verified_credentials:false,status:'active',session_price_paise:89950,currency:'INR'});
+async function using(run,options={}){
+ const context=await browser.newContext({viewport:{width:390,height:844},reducedMotion:'reduce'}),p=await context.newPage();p.setDefaultTimeout(4000);
+ const s={items:[tutor()],total:25,status:200,hold:false,held:[],reads:[],unexpected:[],...options};
+ await p.route('**/*',async route=>{const r=route.request(),u=new URL(r.url()),reply=(v,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(v)}).catch(()=>{});
+  if(u.origin!==origin&&!(u.origin==='http://localhost:1131'&&u.pathname.startsWith('/api/v1/'))){s.unexpected.push(u.origin);return route.abort();}if(!u.pathname.startsWith('/api/v1/'))return route.continue();
+  if(u.pathname==='/api/v1/auth/student/session')return reply(s.signedOut?{authenticated:false,actor:null}:{authenticated:true,actor});
+  if(u.pathname==='/api/v1/tutors'&&r.method()==='GET'){
+   const q=Object.fromEntries(u.searchParams);s.reads.push(q);if(s.status===401)s.signedOut=true;
+   const status=s.status,body=s.malformed?{}:status===200?{items:s.items,total:s.total,offset:Number(q.offset),limit:Number(q.limit),has_more:Number(q.offset)+s.items.length<s.total,sort:q.sort,allowed_sorts:['rating_desc','rating_asc','experience_desc','experience_asc','name_asc','newest']}:{detail:{code:status===401?'authentication_required':status===429?'rate_limit_exceeded':'unavailable',retry_after_seconds:s.retryAfter??0}};
+   const done=()=>reply(body,status);if(s.hold){s.hold=false;s.held.push(done);return;}return done();
+  }
+  s.unexpected.push(`${r.method()} ${u.pathname}`);return route.abort();
+ });try{await run(p,s);assert.deepEqual(s.unexpected,[]);}catch(e){console.error({url:p.url(),text:(await p.locator('body').innerText()).slice(0,1500),reads:s.reads,unexpected:s.unexpected});throw e;}finally{await context.close();}
+}
+const cards=p=>p.locator('.s31-discovery article');
+const ready=async p=>{await p.getByRole('heading',{name:'Find a mentor.',exact:true}).waitFor();await cards(p).first().waitFor();};
+async function held(s){for(let i=0;!s.held.length&&i<400;i++)await delay(10);assert.ok(s.held.length);}
+it('Revision L discovery shows server price, ratings and separate verified claims, one main, no legacy shell',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-31');await ready(p);assert.equal(await p.locator('main').count(),1);assert.equal(await p.locator('.ls-shell').count(),0);
+ assert.match(await cards(p).innerText(),/₹899.50 per session/);assert.match(await cards(p).innerText(),/4.80.*31/);assert.match(await cards(p).innerText(),/Identity verified/);assert.doesNotMatch(await cards(p).innerText(),/Credentials verified|Next available|60 min|free cancellation/);
+ assert.equal(s.reads.length,1);assert.equal(await p.getByRole('link',{name:/Synthetic Mentor a/}).getAttribute('href'),'/s-32?tutor=a');
+}));
+it('search/filters/sort are server-side, reset offset, and restore drafts with Back',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-31?offset=10');await ready(p);await p.getByText('Filters and sort',{exact:true}).click();
+ await p.getByRole('searchbox',{name:'Search mentors',exact:true}).fill('Arbitration');await p.getByLabel('Subject',{exact:true}).fill('Custom subject');await p.getByLabel('Level',{exact:true}).fill('Advanced');
+ await p.getByLabel('Minimum rating',{exact:true}).selectOption('4.5');await p.getByLabel('Minimum experience',{exact:true}).selectOption('5');await p.getByLabel('Verified mentors only',{exact:true}).check();await p.getByLabel('Sort by',{exact:true}).selectOption('name_asc');
+ await p.getByRole('button',{name:'Show mentors',exact:true}).press('Enter');await p.waitForURL('**q=Arbitration*');await ready(p);
+ assert.deepEqual(s.reads.at(-1),{q:'Arbitration',subject:'Custom subject',level:'Advanced',min_rating:'4.5',min_experience_years:'5',verified_only:'true',sort:'name_asc',limit:'10',offset:'0'});
+ assert.equal(await cards(p).count(),1,'do not locally filter a server-selected result');await p.goBack();await p.waitForURL('**offset=10');assert.equal(await p.getByRole('searchbox',{name:'Search mentors',exact:true}).inputValue(),'');assert.equal(await p.getByLabel('Subject',{exact:true}).inputValue(),'');
+}));
+it('pagination keeps focused controls while pending, duplicate-locks, then focuses summary',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-31');await ready(p);s.hold=true;const next=p.getByRole('button',{name:'Next page',exact:true});await next.press('Enter');await held(s);
+ assert.equal(await next.evaluate(e=>e===document.activeElement),true);await next.evaluate(e=>{e.click();e.click();});assert.equal(s.reads.length,2);assert.equal(s.reads[1].offset,'10');
+ await s.held.shift()();await p.waitForFunction(()=>document.activeElement?.id==='s31-results-summary');
+ s.hold=true;await p.getByRole('button',{name:'Previous page',exact:true}).press('Enter');await held(s);await p.getByRole('searchbox',{name:'Search mentors',exact:true}).focus();await s.held.shift()();await ready(p);assert.equal(await p.getByRole('searchbox').evaluate(e=>e===document.activeElement),true);
+}));
+it('initial loading and malformed 2xx never claim no results or free prices',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-31');await held(s);await p.getByRole('status',{name:'Loading mentors'}).waitFor();assert.doesNotMatch(await p.locator('main').innerText(),/0 mentors|No mentors match|Free/);
+ await s.held.shift()();await p.getByRole('alert').waitFor();assert.doesNotMatch(await p.getByRole('alert').innerText(),/HTTP 200|No mentors match/);
+},{hold:true,malformed:true}));
+for(const status of [422,429,503])it(`HTTP ${status}: repeated Retry retains focus and request count is bounded`,()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-31');await p.getByRole('alert').waitFor();await p.waitForFunction(()=>document.activeElement?.getAttribute('role')==='alert');assert.match(await p.getByRole('alert').innerText(),new RegExp(`HTTP ${status}`));
+ const retry=p.getByRole('button',{name:status===429?'Try again':'Retry',exact:true});s.hold=true;await retry.press('Enter');await held(s);assert.notEqual(await p.evaluate(()=>document.activeElement.tagName),'BODY');await retry.evaluate(e=>{e.click();e.click();});assert.equal(s.reads.length,2);
+ await s.held.shift()();await p.waitForFunction(()=>document.activeElement?.getAttribute('role')==='alert');
+ s.status=200;s.hold=true;await retry.press('Enter');await held(s);await p.getByRole('searchbox').focus();await s.held.shift()();await ready(p);assert.equal(await p.getByRole('searchbox').evaluate(e=>e===document.activeElement),true);
+},{status}));
+it('429 cooldown advances without sending automatic search requests',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-31');const retry=p.getByRole('button',{name:'Try again',exact:true});await retry.waitFor();assert.equal(await retry.getAttribute('aria-disabled'),'true');await retry.evaluate(e=>e.click());assert.equal(s.reads.length,1);
+ await p.waitForFunction(()=>document.querySelector('[data-s31-retry]')?.getAttribute('aria-disabled')==='false');assert.equal(s.reads.length,1);
+},{status:429,retryAfter:1}));
+it('offline Retry sends nothing and online pending feedback stops claiming offline',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-31');await p.getByRole('alert').waitFor();await p.context().setOffline(true);await p.getByRole('button',{name:'Retry',exact:true}).press('Enter');await p.getByText('No request was sent. Reconnect and retry.',{exact:true}).waitFor();assert.equal(s.reads.length,1);
+ await p.context().setOffline(false);s.hold=true;s.status=200;await p.getByRole('button',{name:'Retry',exact:true}).press('Enter');await held(s);assert.doesNotMatch(await p.getByRole('alert').innerText(),/offline|No request was sent/);await s.held.shift()();await ready(p);assert.equal(await p.getByRole('alert').count(),0);
+},{status:503}));
+it('zero results and out-of-range pages preserve server total and recovery',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-31?offset=40');await p.getByRole('heading',{name:'No mentors on this page.',exact:true}).waitFor();assert.match(await p.locator('main').innerText(),/25 mentors/);s.total=0;
+ await p.getByRole('button',{name:'Clear filters',exact:true}).press('Enter');await p.getByRole('heading',{name:'No mentors match.',exact:true}).waitFor();assert.equal(s.reads.at(-1).offset,'0');assert.notEqual(await p.evaluate(()=>document.activeElement.tagName),'BODY');
+},{items:[]}));
+it('401 retains the shared session-expiry redirect, no private results',()=>using(async(p,s)=>{await p.goto(origin+'/s-31');await p.waitForURL(/\/s-03/);assert.equal(await cards(p).count(),0);assert.equal(s.reads.length,1);},{status:401}));
+it('320px reflow, 48px controls, no serious/critical axe, long Unicode names',()=>using(async(p)=>{
+ await p.setViewportSize({width:320,height:844});await p.goto(origin+'/s-31');await ready(p);await p.getByText('Filters and sort',{exact:true}).click();assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ for(const e of await p.locator('.s31-discovery button:visible, .s31-discovery input:visible, .s31-discovery select:visible, .s31-discovery summary:visible, .s31-discovery a:visible').all()){assert.ok((await e.boundingBox()).height>=48,await e.getAttribute('id'));}
+ await p.addScriptTag({content:await readFile('node_modules/axe-core/axe.min.js','utf8')});assert.deepEqual(await p.evaluate(async()=>(await window.axe.run()).violations.filter(v=>['serious','critical'].includes(v.impact)).map(v=>v.id)),[]);
+},{items:[{...tutor(),display_name:'अदिति 名 Mentor WithAReallyLongUnbrokenNameWithoutSpaces',headline:null,rating_avg:null,rating_count:0}]}));
+it('a superseded slow search cannot replace the latest response or steal moved focus',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-31');await ready(p);s.hold=true;s.items=[tutor('older')];
+ const search=p.getByRole('searchbox',{name:'Search mentors',exact:true});await search.fill('older');await search.press('Enter');await held(s);
+ s.items=[tutor('latest')];await search.fill('latest');await search.press('Enter');await p.getByRole('link',{name:/Synthetic Mentor latest/}).waitFor();await search.focus();
+ await s.held.shift()();await delay(60);assert.equal(await p.getByRole('link',{name:/Synthetic Mentor older/}).count(),0);assert.equal(await p.getByRole('link',{name:/Synthetic Mentor latest/}).count(),1);assert.equal(await search.evaluate(e=>e===document.activeElement),true);assert.equal(s.reads.length,3);
+}));
+it('anonymous students redirect before any mentor read',()=>using(async(p,s)=>{await p.goto(origin+'/s-31');await p.waitForURL(/\/s-03/);assert.equal(s.reads.length,0);assert.equal(await cards(p).count(),0);},{signedOut:true}));
+it('desktop case/slash route preserves one main, sessions link and keyboard-search label',()=>using(async p=>{
+ await p.setViewportSize({width:1440,height:1024});await p.goto(origin+'/S-31/?sort=name_asc#results');await ready(p);assert.equal(await p.locator('main').count(),1);assert.equal(await p.locator('.s20-related').isVisible(),false);assert.equal(await p.locator('aside').getByRole('link',{name:'My sessions',exact:true}).getAttribute('href'),'/s-35');assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await p.getByRole('searchbox',{name:'Search mentors',exact:true}).press('Tab');assert.equal(await p.getByRole('button',{name:'Search mentors',exact:true}).evaluate(e=>e===document.activeElement),true);
+}));

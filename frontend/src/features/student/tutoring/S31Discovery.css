@@ -1,0 +1,16 @@
+@import '../internships/S20Browse.css';
+.s31-discovery .s20-heading-icon,.s31-discovery .s20-empty:not([role=alert]) .s20-state-icon{background:#1e6b4a1f;color:#1e6b4a}
+.s31-search-form{display:flex;flex-direction:column;gap:13px}
+.s31-discovery input,.s31-discovery select{min-height:48px}
+.s31-discovery .s20-filter-body input:not([type=checkbox]),.s31-discovery select{border:1.5px solid var(--s20-line2);border-radius:12px;background:#fff;color:var(--s20-ink);font:inherit;font-size:15px;padding:0 13px;width:100%;min-width:0}
+.s31-discovery .s20-search input{padding-right:52px}
+.s31-search-submit{position:absolute;inset:0 0 0 auto;min-width:48px;min-height:48px;display:grid;place-items:center;border:0;border-radius:12px;background:transparent;color:var(--s20-indigo)}
+.s31-check{display:flex;gap:10px;align-items:center;min-height:48px;cursor:pointer;font-size:13px;line-height:1.4}
+.s31-check input{width:22px;min-width:22px;margin:0;accent-color:var(--s20-indigo)}
+.s31-check b,.s31-check small{display:block}.s31-check small{font-size:11.5px;color:var(--s20-mut)}
+.s31-discovery .s20-related .s20-btn{width:100%}
+.s31-tutor{grid-template-columns:1fr}.s31-identity{display:flex;gap:12px;align-items:center;min-width:0}.s31-portrait{width:44px;height:44px;flex:none;display:grid;place-items:center;border-radius:50%;background:var(--s20-indq);color:var(--s20-indigo);font-weight:800;font-size:13px}
+.s31-discovery a:focus-visible,.s31-discovery select:focus-visible,.s31-discovery input:focus-visible{outline:3px solid var(--s20-indigo);outline-offset:3px}
+.s31-discovery [aria-disabled=true]{cursor:default;opacity:.65}.s31-discovery .s20-filters summary small{overflow-wrap:anywhere}
+.s31-rate{border:1.5px solid var(--s20-line);border-left:4px solid #7a5a10;border-radius:12px;text-align:left;align-items:flex-start;padding:9px 12px;font-size:11.5px}
+.s31-rate h2{font-family:inherit;font-size:12.5px}.s31-rate p{font-size:11.5px;color:var(--s20-ink2)}
