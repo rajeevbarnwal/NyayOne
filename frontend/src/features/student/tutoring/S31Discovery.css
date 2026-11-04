@@ -1,4 +1,5 @@
-@import '../internships/S20Browse.css';
+/* Shared S-20 styles are already loaded by S20BrowseView. Re-importing them
+   here would move them after the historical school-screen overrides. */
 .s31-discovery .s20-heading-icon,.s31-discovery .s20-empty:not([role=alert]) .s20-state-icon{background:#1e6b4a1f;color:#1e6b4a}
 .s31-search-form{display:flex;flex-direction:column;gap:13px}
 .s31-discovery input,.s31-discovery select{min-height:48px}

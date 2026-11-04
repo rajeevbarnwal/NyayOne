@@ -27,6 +27,17 @@ async function using(run,options={}){
 const cards=p=>p.locator('.s31-discovery article');
 const ready=async p=>{await p.getByRole('heading',{name:'Find a mentor.',exact:true}).waitFor();await cards(p).first().waitFor();};
 async function held(s){for(let i=0;!s.held.length&&i<400;i++)await delay(10);assert.ok(s.held.length);}
+it('loading S-31 leaves historical school CSS cascade overrides intact',()=>using(async p=>{
+ await p.setViewportSize({width:1440,height:1024});await p.goto(origin+'/s-31');await ready(p);
+ // Production-bundle probes catch a repeated shared-CSS import overriding
+ // earlier school-specific rules, without changing their behavioral fixtures.
+ const actual=await p.evaluate(()=>{
+  const probe=document.createElement('div');probe.innerHTML='<div class="v321-internships s27-search"><section class="s20-card"><h2 class="s20-eyebrow">Saved schools</h2></section></div><div class="v321-internships s28-detail"><div class="s20-actions s28-actions"><button class="s20-btn">Save</button><button class="s20-btn">Follow</button></div></div>';
+  document.body.append(probe);
+  try{return {schoolEyebrowMargin:getComputedStyle(probe.querySelector('.s20-eyebrow')).marginBottom,schoolActionGap:getComputedStyle(probe.querySelector('.s28-actions')).gap};}finally{probe.remove();}
+ });
+ assert.deepEqual(actual,{schoolEyebrowMargin:'0px',schoolActionGap:'9px'});
+}));
 it('Revision L discovery shows server price, ratings and separate verified claims, one main, no legacy shell',()=>using(async(p,s)=>{
  await p.goto(origin+'/s-31');await ready(p);assert.equal(await p.locator('main').count(),1);assert.equal(await p.locator('.ls-shell').count(),0);
  assert.match(await cards(p).innerText(),/₹899.50 per session/);assert.match(await cards(p).innerText(),/4.80.*31/);assert.match(await cards(p).innerText(),/Identity verified/);assert.doesNotMatch(await cards(p).innerText(),/Credentials verified|Next available|60 min|free cancellation/);
