@@ -78,3 +78,8 @@ for(const width of [390,1440]){
   await p.setViewportSize({width,height:1024});await p.goto(origin+'/s-32?tutor=mentor-a');await ready(p);const note=p.getByRole('status').filter({hasText:'That local time happens twice'});await note.waitFor();assert.equal(await note.locator(':scope > svg circle').count(),2);assert.equal(await note.locator(':scope > svg path').getAttribute('d'),'M12 7.5V12l3 2');assert.match(await note.innerText(),/The server resolved/);assert.equal(await p.getByRole('button',{name:'Continue to booking',exact:true}).isDisabled(),true);
  },{resolution:{from_local:{dst_adjusted:true,classification:'ambiguous',requested_local:'2027-10-31T01:30:00',resolved_local:'2027-10-31T01:30:00+01:00',instant_utc:'2027-10-31T00:30:00Z'}}}));
 }
+it('S-32 notice and helper computed colors/line-height match frozen tokens',()=>using(async p=>{
+ await p.goto(origin+'/s-32?tutor=mentor-a');const notice=p.getByRole('alert');await notice.waitFor();
+ assert.equal(await notice.evaluate(e=>getComputedStyle(e).color),'rgb(62, 66, 84)');assert.equal(await notice.locator(':scope > svg').evaluate(e=>getComputedStyle(e).color),'rgb(62, 66, 84)');assert.equal(await notice.locator('.s20-action-icon').evaluate(e=>getComputedStyle(e).color),'rgb(46, 58, 140)');
+ for(const line of await p.locator('.s32-source').all())assert.equal(await line.evaluate(e=>getComputedStyle(e).lineHeight),'18.6px');
+},{availabilityStatus:500}));
