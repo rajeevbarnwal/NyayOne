@@ -83,3 +83,8 @@ it('S-32 notice and helper computed colors/line-height match frozen tokens',()=>
  assert.equal(await notice.evaluate(e=>getComputedStyle(e).color),'rgb(62, 66, 84)');assert.equal(await notice.locator(':scope > svg').evaluate(e=>getComputedStyle(e).color),'rgb(62, 66, 84)');assert.equal(await notice.locator('.s20-action-icon').evaluate(e=>getComputedStyle(e).color),'rgb(46, 58, 140)');
  for(const line of await p.locator('.s32-source').all())assert.equal(await line.evaluate(e=>getComputedStyle(e).lineHeight),'18.6px');
 },{availabilityStatus:500}));
+for(const width of [390,1440])it(`${width}: mentor professional headline retains the frozen emphasis`,()=>using(async p=>{
+ await p.setViewportSize({width,height:1024});await p.goto(origin+'/s-32?tutor=mentor-a');await ready(p);
+ const headline=p.locator('.s32-identity .s20-sub');assert.equal(await headline.innerText(),mentor.headline);
+ assert.deepEqual(await headline.evaluate(e=>{const c=getComputedStyle(e);return {weight:c.fontWeight,size:c.fontSize,height:c.lineHeight,color:c.color};}),{weight:'800',size:'12.5px',height:'19.375px',color:'rgb(62, 66, 84)'});
+}));
