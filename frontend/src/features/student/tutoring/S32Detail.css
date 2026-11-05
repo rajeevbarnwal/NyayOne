@@ -1,6 +1,9 @@
 /* S-32 only; the shared S-20 stylesheet is loaded once by S20BrowseView. */
+@font-face{font-family:'NyayOne S32 Rupee';font-style:normal;font-weight:400 700;font-display:swap;src:url('/fonts/s20/PublicSans-v32108-latin-ext.woff2') format('woff2');unicode-range:U+20B9;}
 .s32-detail .s32-back{align-self:flex-start;width:auto;text-decoration:none}
-.s32-identity{display:flex;align-items:center;gap:12px;min-width:0}.s32-identity>div{min-width:0}.s32-identity h1{margin:0}.s32-identity .s20-sub{font-size:12.5px;font-weight:800;margin:2px 0 0}
+.s32-identity{display:flex;align-items:center;gap:12px;min-width:0}.s32-identity>div{min-width:0}.s32-identity h1{margin:0}.s32-identity .s20-sub{font-size:12.5px;font-weight:800;margin:0}
+.s32-detail .s20-chips{margin-top:0}
+.s32-facts dd,.s32-slot small,.s32-aside-price b{font-family:'Public Sans','NyayOne S32 Rupee',system-ui,sans-serif}
 .s32-portrait{width:56px;height:56px;flex:none;display:grid;place-items:center;border-radius:50%;background:var(--s20-indq);color:var(--s20-indigo);font-size:16px;font-weight:800}
 .s32-facts{margin:0;border:1.5px solid var(--s20-line);border-radius:16px;background:#fff;padding:6px 16px}.s32-facts>div,.s32-aside-price{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--s20-line);font-size:13px}.s32-facts>div:last-child{border-bottom:0}.s32-facts dd{margin:0;text-align:right;font-weight:700;min-width:0;overflow-wrap:anywhere}.s32-facts dt{flex-shrink:0}
 .s32-source{font-size:12px;line-height:1.55;color:var(--s20-mut);margin:0;overflow-wrap:anywhere}.s32-source a{display:inline;padding:18px 0;color:var(--s20-indigo);font-weight:700;text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere}.s32-detail a:focus-visible,.s32-detail select:focus-visible,.s32-detail input:focus-visible{outline:3px solid var(--s20-indigo);outline-offset:3px}

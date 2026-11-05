@@ -88,3 +88,17 @@ for(const width of [390,1440])it(`${width}: mentor professional headline retains
  const headline=p.locator('.s32-identity .s20-sub');assert.equal(await headline.innerText(),mentor.headline);
  assert.deepEqual(await headline.evaluate(e=>{const c=getComputedStyle(e);return {weight:c.fontWeight,size:c.fontSize,height:c.lineHeight,color:c.color};}),{weight:'800',size:'12.5px',height:'19.375px',color:'rgb(62, 66, 84)'});
 }));
+for(const width of [390,1440])it(`${width}: identity spacing retains frozen geometry`,()=>using(async p=>{
+ await p.setViewportSize({width,height:1024});await p.goto(origin+'/s-32?tutor=mentor-a');await ready(p);await p.evaluate(()=>document.fonts.ready);
+ assert.equal(await p.locator('.s32-identity .s20-sub').evaluate(e=>getComputedStyle(e).marginTop),'0px');
+ assert.equal(await p.locator('.s32-detail .s20-chips').evaluate(e=>getComputedStyle(e).marginTop),'0px');
+}));
+for(const width of [390,1440])it(`${width}: currency glyphs use the frozen font instead of a system fallback`,()=>using(async p=>{
+ await p.setViewportSize({width,height:1024});await p.goto(origin+'/s-32?tutor=mentor-a');await ready(p);await p.evaluate(()=>document.fonts.ready);
+ const dev=await p.context().newCDPSession(p);await dev.send('DOM.enable');await dev.send('CSS.enable');const {root}=await dev.send('DOM.getDocument');
+ for(const selector of ['.s32-facts>div:last-child dd','.s32-slot small',...(width===1440?['.s32-aside-price b']:[])]){
+  const {nodeId}=await dev.send('DOM.querySelector',{nodeId:root.nodeId,selector});const {fonts}=await dev.send('CSS.getPlatformFontsForNode',{nodeId});
+  assert.ok(fonts.length);assert.ok(fonts.every(f=>f.isCustomFont),`${selector}: system fallback ${JSON.stringify(fonts)}`);
+ }
+ await dev.detach();
+}));
