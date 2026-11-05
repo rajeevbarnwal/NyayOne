@@ -102,3 +102,8 @@ for(const width of [390,1440])it(`${width}: currency glyphs use the frozen font 
  }
  await dev.detach();
 }));
+
+for(const width of [390,1440])it(`${width}: timezone/day field grid uses the frozen 10px gap`,()=>using(async p=>{
+ await p.setViewportSize({width,height:1024});await p.goto(origin+'/s-32?tutor=mentor-a');await ready(p);
+ assert.deepEqual(await p.locator('.s32-fields').evaluate(e=>{const c=getComputedStyle(e);return {row:c.rowGap,column:c.columnGap};}),{row:'10px',column:'10px'});
+}));
