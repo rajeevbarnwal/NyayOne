@@ -46,7 +46,8 @@ import {
   SchoolCompare,
   SchoolSavedFollowed,
 } from './schools/SchoolScreens';
-import { TutorSearch, TutorDetail } from './tutoring/TutorDiscoveryScreens';
+import { TutorDetail } from './tutoring/TutorDiscoveryScreens';
+import { S31Discovery } from './tutoring/S31Discovery';
 import { BookingHoldScreen, SessionConfirmed } from './tutoring/BookingScreens';
 import { SessionLifecycle } from './tutoring/SessionScreens';
 import { ExamOverview, ExamSyllabus, ExamMock, ExamResult, ExamReview, ExamAnalytics } from './exam/ExamScreens';
@@ -114,7 +115,7 @@ export const studentScreens: Record<string, ComponentType<StudentScreenProps>> =
   'S-30': SchoolSavedFollowed,
   // S6 Wave 2 tutoring: tutoring/search, tutoring/detail, tutoring/hold,
   // tutoring/detail (session), tutoring/session (SAATHI-65 + SAATHI-66)
-  'S-31': TutorSearch,
+  'S-31': S31Discovery,
   'S-32': TutorDetail,
   'S-33': BookingHoldScreen,
   'S-34': SessionConfirmed,

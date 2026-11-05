@@ -15,7 +15,12 @@
   "s28": {"cache":"s28-v32108-chromium-149.0.7827.55-41323481198","manifestSha256":"0e68f61b7b664ce41375893827e9d693f516ece614ca66fb6c1318a1a1ebf513","provenanceSha256":"36a33702d2f2eeedb9be2c48c55b8b1af3ca44817996da1b9820930ec8a683b4"},
   "s29": {"cache":"s29-v32108-chromium-149.0.7827.55-41352544483","manifestSha256":"207f0d96ed928beee038f02d193a5febe3e3eae58d5f0b80a5a6af540cd6334c","provenanceSha256":"5de0808e4f1baa04f9696dd2613d04012ded898c4223118e096e1015a9969f17"},
   "s30": {"cache":"s30-v32108-chromium-149.0.7827.55-41593102467","manifestSha256":"f0d18bfc11a72774c2f4ddb923ed98a8f3d24c8e0beaeebbb8a12cc604079aa2","provenanceSha256":"62f4b3ce31ad66bab4d4d79c980a64929264b0f9f6a572d5deba62c23b82d9e6"},
-  "integrityApproval": {"pr":91,"commentId":6623799312,"bundleSha256":"3f2fd7c1422674d609c6aa3ff5bbefff6bdba8f64f8bea0ed01f3a1d9ea0bb68"},
+  "s31": {
+    "cache": "s31-v32108-chromium-149.0.7827.55-41795771621",
+    "manifestSha256": "d16430a6a405418f506085111e4486741ba0d46aa25e7ad32fcc937d3f1778d9",
+    "provenanceSha256": "cef8aedce696d134f8cdbff97a024bdd7d412a5a5441e14c809f31533326ae07"
+  },
+  "integrityApproval": {"pr":90,"commentId":6637492036,"bundleSha256":"e7e90b994f5150b56dda72f3c0bc41186241651e71190e5265b0e959d556e042"},
   "enforced": ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09", "S-10", "S-11", "S-12", "S-13", "S-14", "S-15", "S-16", "S-17", "S-07-popup"],
   "exceptions": [
     {
@@ -3420,6 +3425,255 @@
       ],
       "reason": "S-30 error, desktop, light. Exact hosted live-route capture with synthetic API responses at b414113444caae658f2226ae5a48bf332e40cef1 (run 41603871492); not live-backend or independent Senior QA evidence. Identity disclosure: generic person avatar and accessible name \"Your Profile\" replace prototype-only \"AN\" / \"Aditi Nair\". Explicit owner-authorized selected-tab design variant: the implementation visibly highlights the selected Saved/Following tab with a white background, indigo text and shadow using aria-selected; the frozen markup uses aria-selected but its highlight CSS expects aria-pressed. Retain this truthful selected-state styling without changing tab geometry or selection behavior. Desktop retains functional 48px Home/Profile buttons instead of static labels and a semantic h2 for the visible Compare saved schools aside. These extra control/heading entries change inventories, not their visible positions. School-detail actions are real /s-28 route links with full-school accessible names; Find schools is a real /s-27 link where present, instead of prototype buttons. Remove names retain the full school identity with a different word order. The Saved GET genuinely returns HTTP 500; the independent Following GET succeeds with two. Saved (…) truthfully remains unknown rather than the frozen count 2, and Compare stays disabled until a successful reload. Retry and the error card retain their geometry; meaningful focus adds the visible 3px indigo outline with 3px offset around the error notice, unlike the unfocused frozen image. Corresponding visible control boxes have no residual offset; desktop additional semantic/navigation controls are disclosed above. The redundant mobile empty-state Compare row, Compare icon baseline and Find schools rounded stroke caps were corrected in code. No residual icon-baseline-offset waiver is proposed. Exact image pair only; no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
       "approvalPr": 88
+    },
+    {
+      "screen": "S-31",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "2fbc6455d035d3404a51a10a39f4de6d9930a82e3da0dc24f1ec2814f283dba3",
+      "liveSha256": "b7227c9c52d290cf713f1fa29c0a1af74ecc26d2ef8eae26b1f0fc4b6e445790",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-31 loading, mobile390, light. Exact hosted live-route capture with synthetic API replies at d5b015e0ae80c2d506b3465ad98f5397b208f5b4 (run 41809140046); not live-backend or independent Senior QA evidence. Identity/navigation: a generic person avatar and accessible name \"Your Profile\" replace prototype AN/Aditi Nair. My sessions is a real /s-35 link. Explicit owner-authorized design/interaction variants: retain the visible 48px Search submit button in the search field and backend-supported free-text Subject/Level inputs, rather than inventing closed server enums from the prototype selects. The sort menu offers the supported server sorts and clear labels, including ascending rating/experience. These disclosure controls remain in the DOM when collapsed; their roles/options alter inventories without making hidden controls visible. Explicit owner-authorized design variant: use the results-page introduction consistently across loading/filter/empty/error states, instead of the longer variant introduction. The genuine GET remains pending until context disposal. Loading is announced by the status accessible name rather than the prototype hidden-text inventory; no successful response/count/data is fabricated. Matched DOM-control geometry disclosure (live minus frozen): sessions action: y -20.9219px; search field: y -20.9219px; Subject field: y -20.9219px; Level field: y -20.9219px. The shorter consistent introduction removes one 20.921875px line on mobile, moving subsequent content upward by that amount; any count/code-line offset is additional as disclosed above. The filter inset, checkbox styling, Clear filters icon, compact rate-limit styling, My sessions/Try again icon baselines, and mentor-name underline were corrected in code. No residual icon-baseline waiver is proposed. Exact image pair only: no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 90
+    },
+    {
+      "screen": "S-31",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "eab3463bc47b06527baad06f617c1553e87c90e03f344060fa801e4888c02c18",
+      "liveSha256": "670b51b12c0a16058b6002e105200ace47698b80f6e150518749f8531f192f63",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-31 loading, desktop, light. Exact hosted live-route capture with synthetic API replies at d5b015e0ae80c2d506b3465ad98f5397b208f5b4 (run 41809140046); not live-backend or independent Senior QA evidence. Identity/navigation: a generic person avatar and accessible name \"Your Profile\" replace prototype AN/Aditi Nair. My sessions is a real /s-35 link. Explicit owner-authorized design/interaction variants: retain the visible 48px Search submit button in the search field and backend-supported free-text Subject/Level inputs, rather than inventing closed server enums from the prototype selects. The sort menu offers the supported server sorts and clear labels, including ascending rating/experience. These disclosure controls remain in the DOM when collapsed; their roles/options alter inventories without making hidden controls visible. Desktop retains functional 48px Home/Profile navigation buttons where the prototype has static labels and a semantic h2 for the visible aside title; these add control/heading inventory entries without moving the corresponding visible boxes. Explicit owner-authorized design variant: use the results-page introduction consistently across loading/filter/empty/error states, instead of the longer variant introduction. The genuine GET remains pending until context disposal. Loading is announced by the status accessible name rather than the prototype hidden-text inventory; no successful response/count/data is fabricated. Matched DOM-control geometry disclosure (live minus frozen): the paired visible controls retain identical boxes. The filter inset, checkbox styling, Clear filters icon, compact rate-limit styling, My sessions/Try again icon baselines, and mentor-name underline were corrected in code. No residual icon-baseline waiver is proposed. Exact image pair only: no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 90
+    },
+    {
+      "screen": "S-31",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "05868a13f5af9821f7855a7ea158d6750fe120a0decb431a1ee2630b3c12a3aa",
+      "liveSha256": "11c5d6598400078e12436cf532e931b38ab184755d81f8d9f5312895c42a48b4",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-31 results, mobile390, light. Exact hosted live-route capture with synthetic API replies at d5b015e0ae80c2d506b3465ad98f5397b208f5b4 (run 41809140046); not live-backend or independent Senior QA evidence. Identity/navigation: a generic person avatar and accessible name \"Your Profile\" replace prototype AN/Aditi Nair. My sessions is a real /s-35 link. Explicit owner-authorized design/interaction variants: retain the visible 48px Search submit button in the search field and backend-supported free-text Subject/Level inputs, rather than inventing closed server enums from the prototype selects. The sort menu offers the supported server sorts and clear labels, including ascending rating/experience. These disclosure controls remain in the DOM when collapsed; their roles/options alter inventories without making hidden controls visible. Server-shaped results are sorted before pagination: page 1 is Meera/Kavya/Rohan instead of the prototype Meera/Rohan/Farhan order. Cards retain real full-name detail links to /s-32?tutor={id}, server verification flags, decimal rating strings (4.80/4.70/4.60), prices and initials derived from the first two display-name words (AM/AK rather than MK/KM). The summary uses \"highest rated\" and the same confirmed total/page. Names/headlines differ by returned row; mobile third-card height reflects Rohan's wrapping instead of Farhan's. Previous/Next accessible names add \"page\" and real disabled states remain truthful. Matched DOM-control geometry disclosure (live minus frozen): the paired visible controls retain identical boxes. The filter inset, checkbox styling, Clear filters icon, compact rate-limit styling, My sessions/Try again icon baselines, and mentor-name underline were corrected in code. No residual icon-baseline waiver is proposed. Exact image pair only: no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 90
+    },
+    {
+      "screen": "S-31",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "c68c617c9924e70be09b8527f82d606d958d78e5ce361ea8f4f5c7c27a16cf6e",
+      "liveSha256": "f4ce2212c9f0fb740c3369041994485eb170396c4010f2fe26bec38cde4b6618",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-31 results, desktop, light. Exact hosted live-route capture with synthetic API replies at d5b015e0ae80c2d506b3465ad98f5397b208f5b4 (run 41809140046); not live-backend or independent Senior QA evidence. Identity/navigation: a generic person avatar and accessible name \"Your Profile\" replace prototype AN/Aditi Nair. My sessions is a real /s-35 link. Explicit owner-authorized design/interaction variants: retain the visible 48px Search submit button in the search field and backend-supported free-text Subject/Level inputs, rather than inventing closed server enums from the prototype selects. The sort menu offers the supported server sorts and clear labels, including ascending rating/experience. These disclosure controls remain in the DOM when collapsed; their roles/options alter inventories without making hidden controls visible. Desktop retains functional 48px Home/Profile navigation buttons where the prototype has static labels and a semantic h2 for the visible aside title; these add control/heading inventory entries without moving the corresponding visible boxes. Server-shaped results are sorted before pagination: page 1 is Meera/Kavya/Rohan instead of the prototype Meera/Rohan/Farhan order. Cards retain real full-name detail links to /s-32?tutor={id}, server verification flags, decimal rating strings (4.80/4.70/4.60), prices and initials derived from the first two display-name words (AM/AK rather than MK/KM). The summary uses \"highest rated\" and the same confirmed total/page. Names/headlines differ by returned row; mobile third-card height reflects Rohan's wrapping instead of Farhan's. Previous/Next accessible names add \"page\" and real disabled states remain truthful. Matched DOM-control geometry disclosure (live minus frozen): the paired visible controls retain identical boxes. The filter inset, checkbox styling, Clear filters icon, compact rate-limit styling, My sessions/Try again icon baselines, and mentor-name underline were corrected in code. No residual icon-baseline waiver is proposed. Exact image pair only: no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 90
+    },
+    {
+      "screen": "S-31",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "8712c4ee8e6bec9246b611a024ed3feb67e745acedbd54c932dd6fe4d1e898e7",
+      "liveSha256": "052e35d3bd9f85749e886dbd0e2e45278fd0634e1a507d06a3dbf2edac592636",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-31 filters-open, mobile390, light. Exact hosted live-route capture with synthetic API replies at d5b015e0ae80c2d506b3465ad98f5397b208f5b4 (run 41809140046); not live-backend or independent Senior QA evidence. Identity/navigation: a generic person avatar and accessible name \"Your Profile\" replace prototype AN/Aditi Nair. My sessions is a real /s-35 link. Explicit owner-authorized design/interaction variants: retain the visible 48px Search submit button in the search field and backend-supported free-text Subject/Level inputs, rather than inventing closed server enums from the prototype selects. The sort menu offers the supported server sorts and clear labels, including ascending rating/experience. These disclosure controls remain in the DOM when collapsed; their roles/options alter inventories without making hidden controls visible. Explicit owner-authorized design variant: use the results-page introduction consistently across loading/filter/empty/error states, instead of the longer variant introduction. The actual Subject query is Arbitration. Its synthetic server reply contains two matching records, not the prototype's inconsistent \"3 mentors\" label with five cards. Show the confirmed total, page 1 of 1, supported six sort choices, decimal ratings, server verification flags and derived initials, plus truthful disabled pagination. Subject/Level use free text instead of prototype enum choices. The checkbox helper is an accessible description rather than concatenated label text. Card/detail-link identity and returned data change the lower composition; no client-side invention of server capabilities is approved. Matched DOM-control geometry disclosure (live minus frozen): sessions action: y -20.9219px; search field: y -20.9219px; Subject field: y -20.9219px; Level field: y -20.9219px. The shorter consistent introduction removes one 20.921875px line on mobile, moving subsequent content upward by that amount; any count/code-line offset is additional as disclosed above. The filter inset, checkbox styling, Clear filters icon, compact rate-limit styling, My sessions/Try again icon baselines, and mentor-name underline were corrected in code. No residual icon-baseline waiver is proposed. Exact image pair only: no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 90
+    },
+    {
+      "screen": "S-31",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "7049ee664b45bb917ac596706cc611c9a1bb71003f74aae8f605ed12a3a44858",
+      "liveSha256": "f290dc83e5786c1abdfd64aed12c8cc861a97f695e42da804c28dbe2aa6b86e9",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-31 filters-open, desktop, light. Exact hosted live-route capture with synthetic API replies at d5b015e0ae80c2d506b3465ad98f5397b208f5b4 (run 41809140046); not live-backend or independent Senior QA evidence. Identity/navigation: a generic person avatar and accessible name \"Your Profile\" replace prototype AN/Aditi Nair. My sessions is a real /s-35 link. Explicit owner-authorized design/interaction variants: retain the visible 48px Search submit button in the search field and backend-supported free-text Subject/Level inputs, rather than inventing closed server enums from the prototype selects. The sort menu offers the supported server sorts and clear labels, including ascending rating/experience. These disclosure controls remain in the DOM when collapsed; their roles/options alter inventories without making hidden controls visible. Desktop retains functional 48px Home/Profile navigation buttons where the prototype has static labels and a semantic h2 for the visible aside title; these add control/heading inventory entries without moving the corresponding visible boxes. Explicit owner-authorized design variant: use the results-page introduction consistently across loading/filter/empty/error states, instead of the longer variant introduction. The actual Subject query is Arbitration. Its synthetic server reply contains two matching records, not the prototype's inconsistent \"3 mentors\" label with five cards. Show the confirmed total, page 1 of 1, supported six sort choices, decimal ratings, server verification flags and derived initials, plus truthful disabled pagination. Subject/Level use free text instead of prototype enum choices. The checkbox helper is an accessible description rather than concatenated label text. Card/detail-link identity and returned data change the lower composition; no client-side invention of server capabilities is approved. Matched DOM-control geometry disclosure (live minus frozen): the paired visible controls retain identical boxes. The filter inset, checkbox styling, Clear filters icon, compact rate-limit styling, My sessions/Try again icon baselines, and mentor-name underline were corrected in code. No residual icon-baseline waiver is proposed. Exact image pair only: no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 90
+    },
+    {
+      "screen": "S-31",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "57f35c8ebb3f9ebb7529f58ef8ebc0cc90b43f2d86849e96fd74e4c0bc0eeb45",
+      "liveSha256": "76f3a2b0b0c1ed1ea5861c3116a0a5c36610b67e7e65a54b989edbdc452ed4d7",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-31 no-matches, mobile390, light. Exact hosted live-route capture with synthetic API replies at d5b015e0ae80c2d506b3465ad98f5397b208f5b4 (run 41809140046); not live-backend or independent Senior QA evidence. Identity/navigation: a generic person avatar and accessible name \"Your Profile\" replace prototype AN/Aditi Nair. My sessions is a real /s-35 link. Explicit owner-authorized design/interaction variants: retain the visible 48px Search submit button in the search field and backend-supported free-text Subject/Level inputs, rather than inventing closed server enums from the prototype selects. The sort menu offers the supported server sorts and clear labels, including ascending rating/experience. These disclosure controls remain in the DOM when collapsed; their roles/options alter inventories without making hidden controls visible. Explicit owner-authorized design variant: use the results-page introduction consistently across loading/filter/empty/error states, instead of the longer variant introduction. Explicit interaction-state variant: retain query \"no-synthetic-match\", the 1-active filter summary, confirmed zero count/page 1 of 1, and disabled Previous/Next controls. The frozen variant omits this query/count/pager context. Clear filters remains a real reset action. Matched DOM-control geometry disclosure (live minus frozen): sessions action: y -20.9219px; search field: y -20.9219px; Subject field: y -20.9219px; Level field: y -20.9219px; Clear filters: y +11.4531px. The shorter consistent introduction removes one 20.921875px line on mobile, moving subsequent content upward by that amount; any count/code-line offset is additional as disclosed above. The filter inset, checkbox styling, Clear filters icon, compact rate-limit styling, My sessions/Try again icon baselines, and mentor-name underline were corrected in code. No residual icon-baseline waiver is proposed. Exact image pair only: no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 90
+    },
+    {
+      "screen": "S-31",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "a2d3447ad75f9242be784a919cb3f631917cec9ac74f0d1c0fa5ecab7abbd4f3",
+      "liveSha256": "ad03c6aafe9a676dc125aa8f03b606ef9058369b9c942fa4a77ad25a89a6a389",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-31 no-matches, desktop, light. Exact hosted live-route capture with synthetic API replies at d5b015e0ae80c2d506b3465ad98f5397b208f5b4 (run 41809140046); not live-backend or independent Senior QA evidence. Identity/navigation: a generic person avatar and accessible name \"Your Profile\" replace prototype AN/Aditi Nair. My sessions is a real /s-35 link. Explicit owner-authorized design/interaction variants: retain the visible 48px Search submit button in the search field and backend-supported free-text Subject/Level inputs, rather than inventing closed server enums from the prototype selects. The sort menu offers the supported server sorts and clear labels, including ascending rating/experience. These disclosure controls remain in the DOM when collapsed; their roles/options alter inventories without making hidden controls visible. Desktop retains functional 48px Home/Profile navigation buttons where the prototype has static labels and a semantic h2 for the visible aside title; these add control/heading inventory entries without moving the corresponding visible boxes. Explicit owner-authorized design variant: use the results-page introduction consistently across loading/filter/empty/error states, instead of the longer variant introduction. Explicit interaction-state variant: retain query \"no-synthetic-match\", the 1-active filter summary, confirmed zero count/page 1 of 1, and disabled Previous/Next controls. The frozen variant omits this query/count/pager context. Clear filters remains a real reset action. Matched DOM-control geometry disclosure (live minus frozen): Clear filters: y +32.375px. The filter inset, checkbox styling, Clear filters icon, compact rate-limit styling, My sessions/Try again icon baselines, and mentor-name underline were corrected in code. No residual icon-baseline waiver is proposed. Exact image pair only: no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 90
+    },
+    {
+      "screen": "S-31",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "295e39d744d094e9ca644104cd3012b5970ae2564574133cc43a3831bb44eac7",
+      "liveSha256": "8629402443e8aed145e2ef534074026ba5c53c02c617d25837cd029caeddde82",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-31 rate-limited, mobile390, light. Exact hosted live-route capture with synthetic API replies at d5b015e0ae80c2d506b3465ad98f5397b208f5b4 (run 41809140046); not live-backend or independent Senior QA evidence. Identity/navigation: a generic person avatar and accessible name \"Your Profile\" replace prototype AN/Aditi Nair. My sessions is a real /s-35 link. Explicit owner-authorized design/interaction variants: retain the visible 48px Search submit button in the search field and backend-supported free-text Subject/Level inputs, rather than inventing closed server enums from the prototype selects. The sort menu offers the supported server sorts and clear labels, including ascending rating/experience. These disclosure controls remain in the DOM when collapsed; their roles/options alter inventories without making hidden controls visible. Explicit owner-authorized design variant: use the results-page introduction consistently across loading/filter/empty/error states, instead of the longer variant introduction. The API genuinely replies HTTP 429 with rate_limit_exceeded. The real one-second retry interval expires without an automatic GET or frozen clock; the captured Try again is then available. Retain the truthful HTTP/code line and a semantic h2 where the prototype used compact bold text. The error notice has a meaningful 3px focus outline with 3px offset. The added code line moves the action down 16.5px within the notice. Matched DOM-control geometry disclosure (live minus frozen): sessions action: y -20.9219px; search field: y -20.9219px; Subject field: y -20.9219px; Level field: y -20.9219px; Try again: y -4.42188px. The shorter consistent introduction removes one 20.921875px line on mobile, moving subsequent content upward by that amount; any count/code-line offset is additional as disclosed above. The filter inset, checkbox styling, Clear filters icon, compact rate-limit styling, My sessions/Try again icon baselines, and mentor-name underline were corrected in code. No residual icon-baseline waiver is proposed. Exact image pair only: no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 90
+    },
+    {
+      "screen": "S-31",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "085bc0638810591e83d597a2ac27b35224597513cc372b46aaa2938e692ad96f",
+      "liveSha256": "d79903cf2ade85d75cce26da66ecab99d231b1f2551df966a319400e1f7e7a6b",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-31 rate-limited, desktop, light. Exact hosted live-route capture with synthetic API replies at d5b015e0ae80c2d506b3465ad98f5397b208f5b4 (run 41809140046); not live-backend or independent Senior QA evidence. Identity/navigation: a generic person avatar and accessible name \"Your Profile\" replace prototype AN/Aditi Nair. My sessions is a real /s-35 link. Explicit owner-authorized design/interaction variants: retain the visible 48px Search submit button in the search field and backend-supported free-text Subject/Level inputs, rather than inventing closed server enums from the prototype selects. The sort menu offers the supported server sorts and clear labels, including ascending rating/experience. These disclosure controls remain in the DOM when collapsed; their roles/options alter inventories without making hidden controls visible. Desktop retains functional 48px Home/Profile navigation buttons where the prototype has static labels and a semantic h2 for the visible aside title; these add control/heading inventory entries without moving the corresponding visible boxes. Explicit owner-authorized design variant: use the results-page introduction consistently across loading/filter/empty/error states, instead of the longer variant introduction. The API genuinely replies HTTP 429 with rate_limit_exceeded. The real one-second retry interval expires without an automatic GET or frozen clock; the captured Try again is then available. Retain the truthful HTTP/code line and a semantic h2 where the prototype used compact bold text. The error notice has a meaningful 3px focus outline with 3px offset. The added code line moves the action down 16.5px within the notice. Matched DOM-control geometry disclosure (live minus frozen): Try again: y +16.5px. The filter inset, checkbox styling, Clear filters icon, compact rate-limit styling, My sessions/Try again icon baselines, and mentor-name underline were corrected in code. No residual icon-baseline waiver is proposed. Exact image pair only: no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 90
+    },
+    {
+      "screen": "S-31",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "aa5da5043326e4faa78ebfe074b1c7454bed9935c938b56bf6d9953c673bf898",
+      "liveSha256": "9a5e3018821adbe2dcb3b8490ff402e23826daba2e49232935454ad9dfaec6b0",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-31 error, mobile390, light. Exact hosted live-route capture with synthetic API replies at d5b015e0ae80c2d506b3465ad98f5397b208f5b4 (run 41809140046); not live-backend or independent Senior QA evidence. Identity/navigation: a generic person avatar and accessible name \"Your Profile\" replace prototype AN/Aditi Nair. My sessions is a real /s-35 link. Explicit owner-authorized design/interaction variants: retain the visible 48px Search submit button in the search field and backend-supported free-text Subject/Level inputs, rather than inventing closed server enums from the prototype selects. The sort menu offers the supported server sorts and clear labels, including ascending rating/experience. These disclosure controls remain in the DOM when collapsed; their roles/options alter inventories without making hidden controls visible. Explicit owner-authorized design variant: use the results-page introduction consistently across loading/filter/empty/error states, instead of the longer variant introduction. The API genuinely replies HTTP 500. The error copy and Retry action are retained, with a meaningful 3px focus outline and 3px offset around the error notice rather than an unfocused prototype card. Matched DOM-control geometry disclosure (live minus frozen): sessions action: y -20.9219px; search field: y -20.9219px; Subject field: y -20.9219px; Level field: y -20.9219px; Retry: y -20.9219px. The shorter consistent introduction removes one 20.921875px line on mobile, moving subsequent content upward by that amount; any count/code-line offset is additional as disclosed above. The filter inset, checkbox styling, Clear filters icon, compact rate-limit styling, My sessions/Try again icon baselines, and mentor-name underline were corrected in code. No residual icon-baseline waiver is proposed. Exact image pair only: no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 90
+    },
+    {
+      "screen": "S-31",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "2c728e1617ef50183af5dae7da3a7b736c60d3bf2b4fa676390f1ced4edc2ff0",
+      "liveSha256": "1403d949253ce6cbddd1175e936045c03063bfa2a1c73a13e229abe1d369ce9c",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-31 error, desktop, light. Exact hosted live-route capture with synthetic API replies at d5b015e0ae80c2d506b3465ad98f5397b208f5b4 (run 41809140046); not live-backend or independent Senior QA evidence. Identity/navigation: a generic person avatar and accessible name \"Your Profile\" replace prototype AN/Aditi Nair. My sessions is a real /s-35 link. Explicit owner-authorized design/interaction variants: retain the visible 48px Search submit button in the search field and backend-supported free-text Subject/Level inputs, rather than inventing closed server enums from the prototype selects. The sort menu offers the supported server sorts and clear labels, including ascending rating/experience. These disclosure controls remain in the DOM when collapsed; their roles/options alter inventories without making hidden controls visible. Desktop retains functional 48px Home/Profile navigation buttons where the prototype has static labels and a semantic h2 for the visible aside title; these add control/heading inventory entries without moving the corresponding visible boxes. Explicit owner-authorized design variant: use the results-page introduction consistently across loading/filter/empty/error states, instead of the longer variant introduction. The API genuinely replies HTTP 500. The error copy and Retry action are retained, with a meaningful 3px focus outline and 3px offset around the error notice rather than an unfocused prototype card. Matched DOM-control geometry disclosure (live minus frozen): the paired visible controls retain identical boxes. The filter inset, checkbox styling, Clear filters icon, compact rate-limit styling, My sessions/Try again icon baselines, and mentor-name underline were corrected in code. No residual icon-baseline waiver is proposed. Exact image pair only: no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 90
+    },
+    {
+      "screen": "S-31",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "7a83e5765a72c00e3debbf5a436d23a37cd2752a8236f9574184c88e241303d3",
+      "liveSha256": "fb77545740469dc2b654855a92ed4aa4461b5096ac3db03c57aefae701eb1210",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-31 offline, mobile390, light. Exact hosted live-route capture with synthetic API replies at d5b015e0ae80c2d506b3465ad98f5397b208f5b4 (run 41809140046); not live-backend or independent Senior QA evidence. Identity/navigation: a generic person avatar and accessible name \"Your Profile\" replace prototype AN/Aditi Nair. My sessions is a real /s-35 link. Explicit owner-authorized design/interaction variants: retain the visible 48px Search submit button in the search field and backend-supported free-text Subject/Level inputs, rather than inventing closed server enums from the prototype selects. The sort menu offers the supported server sorts and clear labels, including ascending rating/experience. These disclosure controls remain in the DOM when collapsed; their roles/options alter inventories without making hidden controls visible. Explicit owner-authorized design variant: use the results-page introduction consistently across loading/filter/empty/error states, instead of the longer variant introduction. The browser is genuinely offline before mentor discovery; no tutor GET is sent. Retain truthful \"No request was sent. Reconnect and retry.\" instead of \"Mentor search needs a connection.\" and omit the redundant \"No connection\" line. This reduces the retry position by 24px within the card. The alert has a meaningful 3px focus outline with 3px offset. Playwright disables the HTTP cache, so this fixture explicitly replays only previously fetched unchanged logo bytes at the same URL; it does not fake online status or API success. Matched DOM-control geometry disclosure (live minus frozen): sessions action: y -20.9219px; search field: y -20.9219px; Subject field: y -20.9219px; Level field: y -20.9219px; Retry: y -44.9219px. The shorter consistent introduction removes one 20.921875px line on mobile, moving subsequent content upward by that amount; any count/code-line offset is additional as disclosed above. The filter inset, checkbox styling, Clear filters icon, compact rate-limit styling, My sessions/Try again icon baselines, and mentor-name underline were corrected in code. No residual icon-baseline waiver is proposed. Exact image pair only: no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 90
+    },
+    {
+      "screen": "S-31",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "09e8487a4ee9dccf8353f088a7d06efff0b5c983c8cefbcd18d218c32a7f6e00",
+      "liveSha256": "b398baa82d88444ea3eecf86e6f77db10095cc4536584e6eb8430c0f5dfb598e",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-31 offline, desktop, light. Exact hosted live-route capture with synthetic API replies at d5b015e0ae80c2d506b3465ad98f5397b208f5b4 (run 41809140046); not live-backend or independent Senior QA evidence. Identity/navigation: a generic person avatar and accessible name \"Your Profile\" replace prototype AN/Aditi Nair. My sessions is a real /s-35 link. Explicit owner-authorized design/interaction variants: retain the visible 48px Search submit button in the search field and backend-supported free-text Subject/Level inputs, rather than inventing closed server enums from the prototype selects. The sort menu offers the supported server sorts and clear labels, including ascending rating/experience. These disclosure controls remain in the DOM when collapsed; their roles/options alter inventories without making hidden controls visible. Desktop retains functional 48px Home/Profile navigation buttons where the prototype has static labels and a semantic h2 for the visible aside title; these add control/heading inventory entries without moving the corresponding visible boxes. Explicit owner-authorized design variant: use the results-page introduction consistently across loading/filter/empty/error states, instead of the longer variant introduction. The browser is genuinely offline before mentor discovery; no tutor GET is sent. Retain truthful \"No request was sent. Reconnect and retry.\" instead of \"Mentor search needs a connection.\" and omit the redundant \"No connection\" line. This reduces the retry position by 24px within the card. The alert has a meaningful 3px focus outline with 3px offset. Playwright disables the HTTP cache, so this fixture explicitly replays only previously fetched unchanged logo bytes at the same URL; it does not fake online status or API success. Matched DOM-control geometry disclosure (live minus frozen): Retry: y -24px. The filter inset, checkbox styling, Clear filters icon, compact rate-limit styling, My sessions/Try again icon baselines, and mentor-name underline were corrected in code. No residual icon-baseline waiver is proposed. Exact image pair only: no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 90
+    },
+    {
+      "screen": "S-31",
+      "viewport": "mobile390",
+      "theme": "light",
+      "referenceSha256": "045e6be0a49e52f47befacfc73721ad33766063ffbf4f3b9ae68c4ec0497ab86",
+      "liveSha256": "1415cc882ab17f824ecb280491795c496c3bd0f218204e8ddfcf21f98507bbdd",
+      "checks": [
+        "controls",
+        "geometry",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-31 page-2, mobile390, light. Exact hosted live-route capture with synthetic API replies at 1ea4890a2329edebc485f6fb3b89bc3962f398b2 (run 41874672362); not live-backend or independent Senior QA evidence. Identity/navigation: a generic person avatar and accessible name \"Your Profile\" replace prototype AN/Aditi Nair. My sessions is a real /s-35 link. Explicit owner-authorized design/interaction variants: retain the visible 48px Search submit button in the search field and backend-supported free-text Subject/Level inputs, rather than inventing closed server enums from the prototype selects. The sort menu offers the supported server sorts and clear labels, including ascending rating/experience. These disclosure controls remain in the DOM when collapsed; their roles/options alter inventories without making hidden controls visible. The real Next action requests offset 3; server-shaped records are sorted before pagination, so page 2 is Farhan/Sneha instead of prototype Kavya/Sneha. Preserve server names/headlines, prices, null ratings and false verification flags, derived AF initials, grammatical \"1 year\", and confirmed total/page. Detail actions are real full-name links; Previous/Next accessible names add \"page\". Keyboard focus on the result summary adds the meaningful visible outline after navigation. Matched DOM-control geometry disclosure (live minus frozen): the paired visible controls retain identical boxes. The filter inset, checkbox styling, Clear filters icon, compact rate-limit styling, My sessions/Try again icon baselines, and mentor-name underline were corrected in code. No residual icon-baseline waiver is proposed. Exact image pair only: no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver. Capture-framing replacement disclosure: the S-31-only test fixture now records a deterministic document-top viewport AFTER the genuine Next request to offset 3 and successful product focus handoff. The previously approved mobile image recorded scrollY=10; this exact replacement records scrollY=0. The fixed header is unchanged while the body appears 10px lower in the viewport. Content, request order, focused element s31-results-summary, visible focus outline, product behavior and underlying document dimensions are unchanged. The report labels viewportFraming.testOnly=true, before/after scroll, focusPreserved=true, domModified=false and pixelPostprocessing=false. This is a capture-framing difference, not server-data-only drift, antialiasing or a functional/accessibility waiver. The fixture does not repair or move focus, alter DOM/CSS, delay responses, select retry images or change reference/tolerance/enforcement rules. It fails closed if focus is missing or changes. Only this exact reference/live pair and the already-disclosed identity/data/design/interaction differences above are covered; the other 247 approval records remain unchanged.",
+      "approvalPr": 90
+    },
+    {
+      "screen": "S-31",
+      "viewport": "desktop",
+      "theme": "light",
+      "referenceSha256": "df97102363b15c6482ad2e54834a5e27896d8aae355a647b85f1652071526064",
+      "liveSha256": "b8ad690b29d337045a9803b728a343bfa229738d61bc44cf9aab0c7bbfb3fe74",
+      "checks": [
+        "controls",
+        "geometry",
+        "headings",
+        "pixels",
+        "text"
+      ],
+      "reason": "S-31 page-2, desktop, light. Exact hosted live-route capture with synthetic API replies at d5b015e0ae80c2d506b3465ad98f5397b208f5b4 (run 41809140046); not live-backend or independent Senior QA evidence. Identity/navigation: a generic person avatar and accessible name \"Your Profile\" replace prototype AN/Aditi Nair. My sessions is a real /s-35 link. Explicit owner-authorized design/interaction variants: retain the visible 48px Search submit button in the search field and backend-supported free-text Subject/Level inputs, rather than inventing closed server enums from the prototype selects. The sort menu offers the supported server sorts and clear labels, including ascending rating/experience. These disclosure controls remain in the DOM when collapsed; their roles/options alter inventories without making hidden controls visible. Desktop retains functional 48px Home/Profile navigation buttons where the prototype has static labels and a semantic h2 for the visible aside title; these add control/heading inventory entries without moving the corresponding visible boxes. The real Next action requests offset 3; server-shaped records are sorted before pagination, so page 2 is Farhan/Sneha instead of prototype Kavya/Sneha. Preserve server names/headlines, prices, null ratings and false verification flags, derived AF initials, grammatical \"1 year\", and confirmed total/page. Detail actions are real full-name links; Previous/Next accessible names add \"page\". Keyboard focus on the result summary adds the meaningful visible outline after navigation. Matched DOM-control geometry disclosure (live minus frozen): the paired visible controls retain identical boxes. The filter inset, checkbox styling, Clear filters icon, compact rate-limit styling, My sessions/Try again icon baselines, and mentor-name underline were corrected in code. No residual icon-baseline waiver is proposed. Exact image pair only: no accessibility, overflow, unexpected-error, behavior, focus loss/stealing, reference, tolerance, enforcement or unrelated-state waiver.",
+      "approvalPr": 90
     }
   ]
 }
