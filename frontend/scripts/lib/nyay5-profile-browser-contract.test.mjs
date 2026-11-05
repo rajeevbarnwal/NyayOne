@@ -1210,6 +1210,15 @@ describe('NYAY-5 browser release-gate source contract', () => {
     })).toMatchObject({ typographyExact: true, iconsExact: true });
   });
 
+  it('recognizes only the three S-32 Revision L eyebrow headings', async () => {
+    for (const id of ['s32-zone-heading', 's32-times', 's32-booking']) {
+      const eyebrow = { id, class: 's20-eyebrow' };
+      expect((await visualCensus({ screenId: 'S-32', eyebrow, family: 'Space Grotesk, sans-serif' })).typographyExact).toBe(true);
+      for (const mutant of [{ id: 'other' }, { class: 'other' }, { tagName: 'H1' }]) expect((await visualCensus({ screenId: 'S-32', eyebrow: { ...eyebrow, ...mutant }, family: 'Space Grotesk, sans-serif' })).typographyExact).toBe(false);
+      expect((await visualCensus({ screenId: 'S-33', eyebrow, family: 'Space Grotesk, sans-serif' })).typographyExact).toBe(false);
+    }
+  });
+
   it('recognizes only S-21 About this internship as a Revision L eyebrow', async () => {
     const eyebrow = { id: 's21-about', class: 's21-eyebrow' };
     expect((await visualCensus({ screenId: 'S-21', eyebrow, family: 'Space Grotesk, sans-serif' })).typographyExact).toBe(true);

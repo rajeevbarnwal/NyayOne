@@ -391,7 +391,10 @@ async function recordVisualContract(page, screenId) {
         const s21Eyebrow = contract.screenId === 'S-21' && heading.tagName === 'H2'
           && heading.getAttribute('class') === 's21-eyebrow'
           && heading.getAttribute('id') === 's21-about';
-        const expectedFamily = s19Eyebrow || s20Eyebrow || s21Eyebrow ? ['space grotesk', 'sans-serif'] : expected;
+        const s32Eyebrow = contract.screenId === 'S-32' && heading.tagName === 'H2'
+          && heading.getAttribute('class') === 's20-eyebrow'
+          && ['s32-zone-heading', 's32-times', 's32-booking'].includes(heading.getAttribute('id'));
+        const expectedFamily = s19Eyebrow || s20Eyebrow || s21Eyebrow || s32Eyebrow ? ['space grotesk', 'sans-serif'] : expected;
         return family.length === expectedFamily.length
           && family.every((name, index) => name === expectedFamily[index]);
       }),
