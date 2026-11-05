@@ -1,4 +1,5 @@
 // Test-only exact proposals. These pins never authorize runtime exceptions.
+import {withoutS32ProposalsForTest,withoutS32PolicyBytesForTest} from './nyay66-s32-exceptions.test-fixture.mjs';
 import {approveException} from './nyay66-enforcement.mjs';
 import {normalizeS31Page2ForTest,normalizeS31Page2PolicyBytesForTest} from './nyay66-s31-page2-reapproval.test-fixture.mjs';
 export const s31Proposals=[
@@ -272,6 +273,7 @@ export const s31ProposalHashes=[
 ];
 for(const [i,e] of s31Proposals.entries())if(approveException(e,null,{s31:true})!==s31ProposalHashes[i])throw Error('S31_PROPOSAL_PIN_MISMATCH');
 export function withoutS31ProposalsForTest(exceptions){
+ exceptions=withoutS32ProposalsForTest(exceptions);
  const additions=exceptions.filter(e=>e.screen==='S-31');
  if(additions.length){
   const keys=Object.keys(s31Proposals[0]).sort().join(',');
@@ -283,6 +285,7 @@ export function withoutS31ProposalsForTest(exceptions){
  return exceptions.filter(e=>e.screen!=='S-31');
 }
 export function withoutS31PolicyBytesForTest(bytes){
+ bytes=withoutS32PolicyBytesForTest(bytes);
  const policy=JSON.parse(bytes);withoutS31ProposalsForTest(policy.exceptions);
  if(!policy.exceptions.some(e=>e.screen==='S-31'))return bytes;
  bytes=normalizeS31Page2PolicyBytesForTest(bytes);
