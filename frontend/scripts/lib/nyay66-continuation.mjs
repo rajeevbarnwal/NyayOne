@@ -13,6 +13,7 @@ import {S28_MEASURED_STATES} from './nyay66-s28-coverage.mjs';
 import {S29_MEASURED_STATES} from './nyay66-s29-coverage.mjs';
 import {S30_MEASURED_STATES} from './nyay66-s30-coverage.mjs';
 import {S31_MEASURED_STATES} from './nyay66-s31-coverage.mjs';
+import {S32_MEASURED_STATES} from './nyay66-s32-coverage.mjs';
 export const CONTINUATION_ARCHIVE_SHA256='0476ec549b3776cc33af52692f71a4029404443f4f02f5b0485b02d5f38cf964';
 const DIRECTORY='frontend/test-baselines/nyay66/v3.2.1.08';
 const ARCHIVE=`${DIRECTORY}/NYAYONE_S01_S35_v3.2.1.08.zip`;
@@ -70,9 +71,9 @@ export function continuationRows(data){
     sourceVersion:data.version,sourceArchiveSha256:data.archiveSha256,
   }))));
 }
-export function appendContinuation(report,data,{s18=false,s19=false,s20=false,s21=false,s25=false,s26=false,s27=false,s28=false,s29=false,s30=false,s31=false}={}){
+export function appendContinuation(report,data,{s18=false,s19=false,s20=false,s21=false,s25=false,s26=false,s27=false,s28=false,s29=false,s30=false,s31=false,s32=false}={}){
   let rows=continuationRows(data);const ids=new Set(data.screens.map(s=>s.screen));
-  if(report.rows.some(r=>r.theme==='light'&&ids.has(r.screen)&&!(s18&&r.screen==='S-18')&&!(s19&&r.screen==='S-19')&&!(s20&&r.screen==='S-20')&&!(s21&&r.screen==='S-21')&&!(s25&&r.screen==='S-25')&&!(s26&&r.screen==='S-26')&&!(s27&&r.screen==='S-27')&&!(s28&&r.screen==='S-28')&&!(s29&&r.screen==='S-29')&&!(s30&&r.screen==='S-30')&&!(s31&&r.screen==='S-31')))throw Error('CONTINUATION_ALREADY_REPORTED');
+  if(report.rows.some(r=>r.theme==='light'&&ids.has(r.screen)&&!(s18&&r.screen==='S-18')&&!(s19&&r.screen==='S-19')&&!(s20&&r.screen==='S-20')&&!(s21&&r.screen==='S-21')&&!(s25&&r.screen==='S-25')&&!(s26&&r.screen==='S-26')&&!(s27&&r.screen==='S-27')&&!(s28&&r.screen==='S-28')&&!(s29&&r.screen==='S-29')&&!(s30&&r.screen==='S-30')&&!(s31&&r.screen==='S-31')&&!(s32&&r.screen==='S-32')))throw Error('CONTINUATION_ALREADY_REPORTED');
   let measuredLightRows=0;
   if(s18){
     const expected=new Set(rows.filter(r=>r.screen==='S-18'&&r.designState!=='option-manual').map(r=>`${r.state}:${r.viewport}`));
@@ -163,9 +164,17 @@ export function appendContinuation(report,data,{s18=false,s19=false,s20=false,s2
     measuredLightRows+=found.filter(r=>r.executed===true&&r.measured===true&&r.verdict!=='CAPTURE-FAILED').length;
     rows=rows.filter(r=>r.screen!=='S-31');
   }
+  if(s32){
+    const expected=new Set(rows.filter(r=>r.screen==='S-32'&&S32_MEASURED_STATES.includes(r.designState)).map(r=>`${r.state}:${r.viewport}`));
+    const found=report.rows.filter(r=>r.theme==='light'&&r.screen==='S-32');
+    for(const row of found)if(!expected.delete(`${row.state}:${row.viewport}`))throw Error('S32_MEASURED_COVERAGE_INCOMPLETE');
+    if(expected.size)throw Error('S32_MEASURED_COVERAGE_INCOMPLETE');
+    measuredLightRows+=found.filter(r=>r.executed===true&&r.measured===true&&r.verdict!=='CAPTURE-FAILED').length;
+    rows=rows.filter(r=>r.screen!=='S-32');
+  }
   // Existing finalizer's verdict, failures, 74 required rows and blocking result
   // are preserved verbatim. These source-only rows cannot authorize promotion.
   return {...report,rows:[...report.rows,...rows],continuation:{version:data.version,archiveSha256:data.archiveSha256,
     designApproval:data.designApproval,screens:15,states:191,unmeasuredLightRows:382-measuredLightRows,pngBaselinesImported:false,
-    ...(s18||s19||s20||s21||s25||s26||s27||s28||s29||s30||s31?{rasterizedScreens:[...(s18?['S-18']:[]),...(s19?['S-19']:[]),...(s20?['S-20']:[]),...(s21?['S-21']:[]),...(s25?['S-25']:[]),...(s26?['S-26']:[]),...(s27?['S-27']:[]),...(s28?['S-28']:[]),...(s29?['S-29']:[]),...(s30?['S-30']:[]),...(s31?['S-31']:[])],importedReferenceRows:(s18?18:0)+(s19?52:0)+(s20?20:0)+(s21?16:0)+(s25?12:0)+(s26?8:0)+(s27?22:0)+(s28?14:0)+(s29?12:0)+(s30?16:0)+(s31?16:0),measuredLightRows}: {})}};
+    ...(s18||s19||s20||s21||s25||s26||s27||s28||s29||s30||s31||s32?{rasterizedScreens:[...(s18?['S-18']:[]),...(s19?['S-19']:[]),...(s20?['S-20']:[]),...(s21?['S-21']:[]),...(s25?['S-25']:[]),...(s26?['S-26']:[]),...(s27?['S-27']:[]),...(s28?['S-28']:[]),...(s29?['S-29']:[]),...(s30?['S-30']:[]),...(s31?['S-31']:[]),...(s32?['S-32']:[])],importedReferenceRows:(s18?18:0)+(s19?52:0)+(s20?20:0)+(s21?16:0)+(s25?12:0)+(s26?8:0)+(s27?22:0)+(s28?14:0)+(s29?12:0)+(s30?16:0)+(s31?16:0)+(s32?22:0),measuredLightRows}: {})}};
 }
