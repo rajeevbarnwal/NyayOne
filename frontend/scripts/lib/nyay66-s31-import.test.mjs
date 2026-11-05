@@ -92,7 +92,7 @@ describe('S-31 archive import fails closed before writing',()=>{
     current.exceptions=withoutS31ProposalsForTest(current.exceptions);
     expect(current.exceptions).toHaveLength(232);
     expect(currentBytes.slice(currentBytes.indexOf('  "exceptions": ['))).toBe(beforeBytes.slice(beforeBytes.indexOf('  "exceptions": [')));
-    delete current.s31;delete current.integrityApproval;delete before.integrityApproval;
+    expect(current.s32).toEqual({"cache":"s32-v32108-chromium-149.0.7827.55-42000573063","manifestSha256":"5e972c42dd42416603f3f6f69448cdbfc5497fefac61a5243ca28f857a6e13c0","provenanceSha256":"da6ce5a2091308254397c0d60e73505d82a75a2ea7dfb673e89155921ef6876d"});delete current.s32;delete current.s31;delete current.integrityApproval;delete before.integrityApproval;
     expect(current).toEqual(before);
     const rows=continuationRows(data).filter(r=>r.screen==='S-31');
     expect(rows).toHaveLength(16);
