@@ -79,12 +79,12 @@ describe('S-33 archive import fails closed before writing',()=>{
       await expect(loadS33Cache(f.dir,config,data,fonts)).rejects.toThrow('S33_ARTIFACT_CHECKSUM_MISMATCH');
     }finally{rmSync(f.dir,{recursive:true,force:true});}
   });
-  it('loads the bound reference cache in the hosted gate without claiming product capture',()=>{
+  it('requires separate product capture after loading the verified reference cache',()=>{
     const live=readFileSync(join(root,'frontend/scripts/nyay66-live.mjs'),'utf8');
     expect(live).toContain("import {loadS33Cache} from './lib/nyay66-s33-import.mjs'");
     expect(live).toContain('await loadS33Cache(root,config.s33,continuation,manifest.fonts)');
     expect(live).toContain('report.s33Reference={cache:config.s33.cache,manifestSha256:config.s33.manifestSha256,provenance:s33.provenance}');
-    expect(live).not.toContain('captureS33Rows');
+    expect(live).toContain('await captureS33Rows({browser,origin,out,reference:s33})');
   });
   it('pins all 28 references and exact owner-dispatch provenance while preserving historical policy and DESIGN-GAP rows',async()=>{
     const got=await loadS33Cache(root,policy.s33,data,fonts);
