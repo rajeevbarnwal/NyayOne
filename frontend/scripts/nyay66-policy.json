@@ -21,6 +21,7 @@
     "provenanceSha256": "cef8aedce696d134f8cdbff97a024bdd7d412a5a5441e14c809f31533326ae07"
   },
   "s32": {"cache":"s32-v32108-chromium-149.0.7827.55-42000573063","manifestSha256":"5e972c42dd42416603f3f6f69448cdbfc5497fefac61a5243ca28f857a6e13c0","provenanceSha256":"da6ce5a2091308254397c0d60e73505d82a75a2ea7dfb673e89155921ef6876d"},
+  "s33": {"cache":"s33-v32108-chromium-149.0.7827.55-42232322310","manifestSha256":"0e473a7a59f21fb909037024a6bb34c9959124b327a95d7c30db68a8f1fe7b12","provenanceSha256":"1c5cd12d34fc2347fd1b8f56ba9ca767a68dd9350a915c42ef7e4de68c49b860"},
   "integrityApproval": {"pr": 95, "commentId": 6686160564, "bundleSha256": "1f7a8a0a8e824c12f54a9e933403c8969dcdfa0e19131b962131ce64c94dcf28"},
   "enforced": ["S-01", "S-02", "S-03", "S-04", "S-05", "S-06", "S-07", "S-08", "S-09", "S-10", "S-11", "S-12", "S-13", "S-14", "S-15", "S-16", "S-17", "S-07-popup"],
   "exceptions": [
