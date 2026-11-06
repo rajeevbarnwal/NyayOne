@@ -9,7 +9,7 @@ const positive=(x:unknown):x is number=>Number.isSafeInteger(x)&&Number(x)>0;
 const instant=(x:unknown):x is string=>typeof x==='string'&&/(Z|[+-]\d{2}:\d{2})$/i.test(x)&&Number.isFinite(Date.parse(x));
 function invalid(status:number):never{throw new TutoringApiError(status,'invalid_response','',false);}
 async function request(path:string,body?:Record<string,unknown>){
- const response=await studentApiFetch('/api/v1'+path,{method:body?'POST':'GET',...(body?{body:JSON.stringify(body)}:{})});
+ const response=await studentApiFetch('/api/v1'+path,{method:body?'POST':'GET',...(body?{body:JSON.stringify(body),headers:{'Content-Type':'application/json'}}:{})});
  const value:unknown=await response.json().catch(()=>null);
  if(!response.ok){const detail=rec(value)&&rec(value.detail)?value.detail:{};throw new TutoringApiError(response.status,text(detail.code)?detail.code:`http_${response.status}`,'',typeof detail.retryable==='boolean'?detail.retryable:undefined,detail);}
  return {value,status:response.status};
