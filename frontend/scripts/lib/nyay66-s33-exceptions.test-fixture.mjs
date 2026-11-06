@@ -1,3 +1,4 @@
+import {restoreS33RecoveryForTest,restoreS33RecoveryBytesForTest} from './nyay66-s33-recovery-reapproval.test-fixture.mjs';
 // Test-only exact proposals. These pins never authorize runtime exceptions.
 import {approveException} from './nyay66-enforcement.mjs';
 export const s33Proposals=[
@@ -479,6 +480,7 @@ export const s33ProposalHashes=[
 ];
 for(const [i,e] of s33Proposals.entries())if(approveException(e,null,{s33:true})!==s33ProposalHashes[i])throw Error('S33_PROPOSAL_PIN_MISMATCH');
 export function withoutS33ProposalsForTest(exceptions){
+ exceptions=restoreS33RecoveryForTest(exceptions);
  const additions=exceptions.filter(e=>e.screen==='S-33');
  if(additions.length){
   const keys=Object.keys(s33Proposals[0]).sort().join(',');
@@ -490,6 +492,7 @@ export function withoutS33ProposalsForTest(exceptions){
  return exceptions.filter(e=>e.screen!=='S-33');
 }
 export function withoutS33PolicyBytesForTest(bytes){
+ bytes=restoreS33RecoveryBytesForTest(bytes);
  const policy=JSON.parse(bytes);withoutS33ProposalsForTest(policy.exceptions);
  if(!policy.exceptions.some(e=>e.screen==='S-33'))return bytes;
  const record=e=>JSON.stringify(e,null,2).replace(/^/gm,'    ');
