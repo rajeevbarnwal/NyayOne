@@ -1717,17 +1717,17 @@ async function stageB(page) {
   ]);
   const arts = [];
   const tutorId = seedTutorWithSlots();
-  await go(page, `${WEB}/s-32?tutor=${tutorId}`, 'section.tt-phead h1');
-  await page.waitForSelector('div.tt-slots button.tt-slotbtn', { timeout: 20000 });
+  await go(page, `${WEB}/s-32?tutor=${tutorId}`, '.s32-identity h1');
+  await page.waitForSelector('.s32-slots button.s32-slot', { timeout: 20000 });
   await settled(page);
   arts.push(await shot(page, 'b1_s32_detail_availability'));
   const detail = await page.evaluate(() => ({
-    name: document.querySelector('section.tt-phead h1')?.textContent?.trim(),
-    chips: [...document.querySelectorAll('section.tt-phead span.tt-chip')].map((c) => c.textContent.trim()),
-    provenance: [...document.querySelectorAll('details.tt-dis .tt-kv')].map((k) => k.textContent.trim()).slice(0, 12),
-    slots: [...document.querySelectorAll('div.tt-slots button.tt-slotbtn')].map((b) => ({
-      label: b.querySelector('.tt-sl')?.textContent?.trim(),
-      state: b.querySelector('.tt-chip')?.textContent?.trim(),
+    name: document.querySelector('.s32-identity h1')?.textContent?.trim(),
+    chips: [...document.querySelectorAll('.s32-detail .s20-chips .s20-chip')].map((c) => c.textContent.trim()),
+    provenance: [...document.querySelectorAll('.s32-source')].map((k) => k.textContent.trim()).slice(0, 12),
+    slots: [...document.querySelectorAll('.s32-slots button.s32-slot')].map((b) => ({
+      label: b.textContent?.trim(),
+      state: b.getAttribute('aria-checked'),
       disabled: b.disabled,
     })),
   }));
@@ -1735,13 +1735,13 @@ async function stageB(page) {
   await withApi(
     page,
     { method: 'GET', route: /\/availability$/, maxStatus: 400 },
-    () => page.selectOption('#tt-tz', 'Europe/London'),
+    () => page.selectOption('#s32-zone', 'Europe/London'),
   );
   await page.waitForFunction(() => location.search.includes('tz=Europe'), { timeout: 10000 });
-  await page.waitForSelector('div.tt-slots button.tt-slotbtn', { timeout: 20000 });
+  await page.waitForSelector('.s32-slots button.s32-slot', { timeout: 20000 });
   await settled(page);
   arts.push(await shot(page, 'b2_s32_availability_timezone_london'));
-  const londonLabels = await page.$$eval('div.tt-slots button.tt-slotbtn .tt-sl', (e) => e.map((x) => x.textContent.trim()));
+  const londonLabels = await page.$$eval('.s32-slots button.s32-slot', (e) => e.map((x) => x.textContent.trim()));
 
   chk.ok('S-32 renders the mentor identity', 'a non-empty <h1> mentor name', detail.name, (v) => typeof v === 'string' && v.length > 0);
   chk.ok('availability slots are rendered', 'at least one bookable slot button', detail.slots.length, (n) => n > 0);

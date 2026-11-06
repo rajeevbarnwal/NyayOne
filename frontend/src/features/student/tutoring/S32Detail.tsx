@@ -1,0 +1,93 @@
+import {useEffect,useLayoutEffect,useMemo,useRef,useState,type KeyboardEvent} from 'react';
+import {Link,useNavigate,useSearchParams} from 'react-router-dom';
+import {useQuery} from '@tanstack/react-query';
+import {useAuth,useStudentSession} from '../../../app/authContext';
+import {NyayOneRevLLockup} from '../auth/NyayOneRevLIcon';
+import {Icon} from '../internships/S20BrowseView';
+import {TutoringApiError} from '../lib/tutoringApi';
+import {canonicalMentorId,availabilityQuery,readMentorAvailability,readMentorDetail,type MentorSlot} from './s32Api';
+import './S32Detail.css';
+class OfflineRead extends Error {}
+const money=(n:number,currency:string)=>new Intl.NumberFormat('en-IN',{style:'currency',currency,minimumFractionDigits:n%100?2:0,maximumFractionDigits:2}).format(n/100);
+const initials=(name:string)=>name.trim().split(/\s+/u).slice(0,2).map(n=>Array.from(n)[0]).join('').toLocaleUpperCase()||'?';
+function sourceLink(raw:string|null){try{const u=new URL(raw??'');return ['http:','https:'].includes(u.protocol)&&!u.username&&!u.password?u:null;}catch{return null;}}
+function Calendar({size=18}:{size?:number}){return <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5.5" width="16" height="15" rx="2.5" fill="currentColor" opacity=".14"/><rect x="4" y="5.5" width="16" height="15" rx="2.5" fill="none" stroke="currentColor" strokeWidth="1.9"/><path d="M4 10h16M8 3.5v4M16 3.5v4" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"/></svg>;}
+function Mentors({size=18}:{size?:number}){return <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.2" fill="currentColor" opacity=".16"/><circle cx="9" cy="9" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.8"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M15.5 6.2a3.2 3.2 0 0 1 0 5.9M20.5 19a5.2 5.2 0 0 0-3.6-4.9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>;}
+function Warning({size=18}:{size?:number}){return <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 21 20H3z" fill="currentColor" opacity=".16"/><path d="M12 4 21 20H3z" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round"/><path d="M12 10v4.5M12 17.2v.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>;}
+function Clock(){return <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="currentColor" opacity=".14"/><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" strokeWidth="1.9"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"/></svg>;}
+function slotTime(slot:MentorSlot,zone:string){const day=new Intl.DateTimeFormat('en-GB',{timeZone:zone,weekday:'short',day:'numeric',month:'short'}).format(new Date(slot.start_utc));const fmt=new Intl.DateTimeFormat('en-US',{timeZone:zone,hour:'numeric',minute:'2-digit',timeZoneName:'short'});return {day,time:`${fmt.format(new Date(slot.start_utc))} to ${fmt.format(new Date(slot.end_utc))}`};}
+export function S32Detail(){const auth=useAuth(),[sp]=useSearchParams();return <Detail key={`${auth.userId}:${auth.roles.join(',')}:${sp.get('tutor')??''}`}/>;}
+function Detail(){
+ const auth=useAuth(),session=useStudentSession(),nav=useNavigate(),[sp,setSp]=useSearchParams(),id=canonicalMentorId(sp.get('tutor')?.trim()??'');
+ const [deviceZone]=useState(()=>Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'),[retrying,setRetrying]=useState<'profile'|'availability'|null>(null),[selection,setSelection]=useState<{key:string;slot:string;stamp:number}|null>(null),[now,setNow]=useState(Date.now());
+ const request=useMemo(()=>availabilityQuery(sp,deviceZone),[sp,deviceZone]),key=request.toString();
+ const root=useRef<HTMLDivElement>(null),first=useRef(true),mounted=useRef(true),lock=useRef(false),continuing=useRef(false),action=useRef<{trigger:HTMLElement;key:string;kind:string}|null>(null),oldErrors=useRef<{profile:unknown;availability:unknown}>({profile:null,availability:null});
+ const authorized=session.phase==='authenticated'&&auth.isAuthenticated&&auth.roles.includes('student');
+ const common={retry:false,staleTime:0,networkMode:'always' as const,refetchOnWindowFocus:false,refetchOnReconnect:false};
+ const profile=useQuery({...common,queryKey:['s32-profile',auth.userId,id],queryFn:({signal})=>{if(!navigator.onLine)throw new OfflineRead();return readMentorDetail(id,signal);},enabled:authorized&&!!id});
+ const availability=useQuery({...common,queryKey:['s32-availability',auth.userId,id,key],queryFn:({signal})=>{if(!navigator.onLine)throw new OfflineRead();return readMentorAvailability(id,request,signal);},enabled:authorized&&!!id&&profile.isSuccess});
+ for(const [kind,q] of [['profile',profile],['availability',availability]] as const){if(q.error)oldErrors.current[kind]=q.error;else if(q.isSuccess&&!q.isFetching)oldErrors.current[kind]=null;}
+ const pError=profile.error??(retrying==='profile'?oldErrors.current.profile:null),aError=availability.error??(retrying==='availability'?oldErrors.current.availability:null);
+ const tutor=authorized&&!pError?profile.data:undefined,av=authorized&&tutor&&!aError&&!availability.isFetching?availability.data:undefined;
+ const busy=profile.isFetching||availability.isFetching||!!retrying;
+ const selected=av&&selection?.key===key&&selection.stamp===availability.dataUpdatedAt?av.slots.find(s=>s.slot_id===selection.slot&&s.status==='available'):undefined;
+ useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
+ useEffect(()=>{
+  // Back can cancel a pending route transition before this view unmounts.
+  const cancelContinuation=()=>{if(continuing.current){continuing.current=false;setSelection(null);}};
+  window.addEventListener('popstate',cancelContinuation);
+  return()=>window.removeEventListener('popstate',cancelContinuation);
+ },[]);
+ const error=pError??aError,wait=error instanceof TutoringApiError&&error.status===429&&Number.isFinite(error.retryAfterSeconds)?Math.max(0,error.retryAfterSeconds!):0;
+ const until=(pError?profile.errorUpdatedAt:availability.errorUpdatedAt)+wait*1000,remaining=wait>0?Math.max(0,Math.ceil((until-now)/1000)):0;
+ useEffect(()=>{if(!wait)return;setNow(Date.now());const timer=setInterval(()=>setNow(Date.now()),250);return()=>clearInterval(timer);},[wait,until]);
+ useLayoutEffect(()=>{
+  const host=root.current;if(!host)return;const owned=action.current;
+  if(owned&&owned.key!==key){action.current=null;return;}
+  if(owned&&document.activeElement!==owned.trigger&&document.activeElement!==document.body){action.current=null;return;}
+  if(busy||session.phase==='pending')return;
+  const notice=host.querySelector<HTMLElement>('[role="alert"]');
+  if(first.current){first.current=false;if(notice&&document.activeElement===document.body)notice.focus({preventScroll:true});}
+  if(owned){action.current=null;(notice??host.querySelector<HTMLElement>(owned.kind==='profile'?'h1':'#s32-times'))?.focus({preventScroll:true});}
+ });
+ function change(name:string,value:string,restore=false){action.current=null;setSelection(null);const next=new URLSearchParams(sp);if(value)next.set(name,value);else next.delete(name);if(name!=='offset')next.delete('offset');if(name==='date'){for(const k of ['from_local','to_local','from_utc','to_utc'])next.delete(k);}if(restore){const target=root.current?.querySelector<HTMLElement>('#s32-times');if(target){target.focus({preventScroll:true});action.current={trigger:target,key:availabilityQuery(next,deviceZone).toString(),kind:'availability'};}}setSp(next);}
+ async function retry(kind:'profile'|'availability',trigger:HTMLElement){
+  if(lock.current||busy||remaining)return;lock.current=true;action.current={trigger,key,kind};trigger.focus({preventScroll:true});setSelection(null);setRetrying(kind);
+  try{if(session.phase==='unavailable')await session.refresh();else await (kind==='profile'?profile:availability).refetch({cancelRefetch:false});}finally{lock.current=false;if(mounted.current)setRetrying(null);}
+ }
+ function selectSlot(s:MentorSlot){if(!av||s.status!=='available'||busy)return;setSelection({key,slot:s.slot_id,stamp:availability.dataUpdatedAt});}
+ function slotKey(e:KeyboardEvent<HTMLButtonElement>,s:MentorSlot){
+  if(!av||!['ArrowRight','ArrowLeft','ArrowDown','ArrowUp','Home','End'].includes(e.key))return;e.preventDefault();const list=av.slots.filter(x=>x.status==='available');if(!list.length)return;const index=list.findIndex(x=>x.slot_id===s.slot_id),n=e.key==='Home'?0:e.key==='End'?list.length-1:(index+(['ArrowRight','ArrowDown'].includes(e.key)?1:-1)+list.length)%list.length;selectSlot(list[n]);root.current?.querySelectorAll<HTMLButtonElement>('[data-slot]').forEach(b=>{if(b.dataset.slot===list[n].slot_id)b.focus();});
+ }
+ const retryIcon=<span className="s20-action-icon"><Icon name="refresh" size={18}/></span>;
+ function failure(err:unknown,kind:'profile'|'availability'){
+  const status=err instanceof TutoringApiError&&err.status>=400&&err.status<=599?err.status:null,offline=err instanceof OfflineRead,missing=status===404,invalidLink=kind==='profile'&&status===422,checking=retrying===kind;
+  const Heading=kind==='availability'?'h3':'h2';
+  return <section className={kind==='availability'?'s32-notice s32-risk':'s20-empty'} role="alert" tabIndex={-1}>{kind==='availability'?(offline?<Icon name="offline" size={18}/>:<Warning/>):<span className="s20-state-icon s20-risk">{offline?<Icon name="offline"/>:<Warning size={20}/>}</span>}<div><Heading>{checking?'Checking availability and profile.':offline?'You are offline.':missing?'This mentor profile is not available.':kind==='profile'?'The profile did not load.':'Times did not load.'}</Heading><p>{checking?'A request is in progress.':offline?'No request was sent. Reconnect and retry.':missing?'The profile was withdrawn or the link is out of date.':status===422?invalidLink?'Check the mentor link or find another mentor.':'Check the timezone, date or window and try again.':status===429?remaining?`Try again in ${remaining} seconds.`:'Wait a moment, then try again.':kind==='profile'?'Try again in a moment.':'The profile is current; availability could not be fetched.'}</p>{!checking&&status&&<div className="s20-code">HTTP {status}</div>}<div className="s20-actions">{missing||invalidLink?<Link className="s20-btn s20-primary" to="/s-31"><span className="s20-action-icon"><Mentors/></span>Find a mentor</Link>:<button className={`s20-btn${kind==='profile'?' s20-primary':''}`} aria-disabled={busy||remaining>0} aria-busy={checking||undefined} onClick={e=>void retry(kind,e.currentTarget)}>{retryIcon}{kind==='profile'?'Retry':'Retry availability'}</button>}</div></div></section>;
+ }
+ const zone=av?.iana_timezone??request.get('timezone')!,zones=Array.from(new Set([deviceZone,'Asia/Kolkata','Europe/London','America/New_York','Asia/Dubai','UTC',request.get('timezone')!]));
+ const source=sourceLink(tutor?.source_url??null),aggregate=tutor?.rating_aggregate;
+ return <div className="v321-internships s32-detail" ref={root} data-screen="S-32" data-v34-screen="S-32" onFocusCapture={e=>{first.current=false;if(action.current&&e.target!==action.current.trigger)action.current=null;}}>
+  <header className="s20-header"><img className="s20-mark" src="/brand/nyayone-mark.svg" alt="NyayOne" width="30" height="30"/><span className="s20-mobile-title">Mentor</span><div className="s20-lockup"><NyayOneRevLLockup/></div><nav aria-label="Site"><button onClick={()=>nav('/s-14')}>Home</button><span>Research</span><span>Calendar</span><span>Careers</span><button onClick={()=>nav('/s-17')}>Profile</button></nav><button className="s20-avatar" aria-label="Your Profile" onClick={()=>nav('/s-17')}><span><Icon name="person"/></span></button></header>
+  <div className="s20-layout"><main id="main-content">
+   <Link className="s20-btn s32-back" to="/s-31"><span className="s20-action-icon"><Icon name="back" size={18}/></span>Mentors</Link>
+   {tutor?<div className="s32-identity"><span className="s32-portrait" aria-hidden="true">{initials(tutor.display_name)}</span><div><h1 tabIndex={-1}>{tutor.display_name}</h1><p className="s20-sub">{tutor.headline||'Headline not provided'}</p></div></div>:<h1 tabIndex={-1}><span className="s20-state-icon s32-green"><Mentors size={20}/></span>Mentor.</h1>}
+   {!id?<section className="s20-empty" role="alert" tabIndex={-1}><h2>Choose a mentor first.</h2><Link className="s20-btn s20-primary" to="/s-31"><span className="s20-action-icon"><Mentors/></span>Find a mentor</Link></section>:session.phase==='unavailable'?failure(null,'profile'):pError?failure(pError,'profile'):!tutor?<div className="s20-skeletons" role="status" aria-label="Loading mentor"><div/><div/><div/></div>:<>
+    <div className="s20-chips">{([['Identity',tutor.verified_identity],['Credentials',tutor.verified_credentials]] as const).map(([label,verified])=><span className={`s20-chip${verified?' s20-verified':''}`} key={label}>{verified&&<span className="s20-chip-dot"/>}{label} {verified?'verified':'not verified'}</span>)}</div>
+    <dl className="s32-facts">{[['Experience',`${tutor.experience_years} ${tutor.experience_years===1?'year':'years'}`],['Rating',!aggregate?.rating_count||aggregate.rating_avg===null?'No ratings yet':`${aggregate.rating_avg} from ${aggregate.rating_count} ${aggregate.rating_count===1?'rating':'ratings'}`],['Subjects',tutor.subjects.map(s=>`${s.subject} (${s.level})`).join(', ')||'Not provided'],['Price per session',money(tutor.session_price_paise,tutor.currency)]].map(([k,v])=><div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+    <p className="s32-source">Profile source: {source?<a href={source.href} target="_blank" rel="noopener noreferrer">{tutor.source||'Source'} ({source.hostname})</a>:tutor.source||'Not provided'}{tutor.retrieved_at?`, retrieved ${new Intl.DateTimeFormat('en-GB',{dateStyle:'medium',timeZone:'UTC'}).format(new Date(tutor.retrieved_at))}.`:'. Retrieval date not provided.'}</p>
+    <section className="s20-card s32-controls" aria-labelledby="s32-zone-heading"><h2 className="s20-eyebrow" id="s32-zone-heading">Time zone and day</h2><div className="s32-fields"><div className="s20-field"><label htmlFor="s32-zone">Show times in</label><select id="s32-zone" value={request.get('timezone')!} onChange={e=>change('tz',e.target.value)}>{zones.map(z=><option key={z} value={z}>{z}</option>)}</select><small>This device is set to {deviceZone}.</small></div><div className="s20-field"><label htmlFor="s32-day">On a single day</label><input id="s32-day" type="date" value={sp.get('date')??''} onChange={e=>change('date',e.target.value)}/></div></div>
+     {sp.get('date')&&<button className="s20-btn" onClick={()=>change('date','',true)}>{retryIcon}Clear day</button>}
+     {av&&Object.entries(av.local_resolution).filter(([,r])=>r.dst_adjusted).map(([k,r])=><div className="s32-notice" role="status" key={k}><Clock/><div><h3>{r.classification==='ambiguous'?'That local time happens twice on this date.':'That local time does not exist on this date.'}</h3><p>The server resolved {r.requested_local} to {r.resolved_local} in {zone} ({r.instant_utc}). Check the exact times before continuing.</p></div></div>)}
+     <p className="s32-source">Available times come from the server. Each time shows its length and price; unavailable times cannot be selected.</p>
+    </section>
+    <section className="s32-times" aria-labelledby="s32-times"><h2 className="s20-eyebrow" id="s32-times" tabIndex={-1}>Times in {zone}</h2>
+     {aError?failure(aError,'availability'):!av?<div role="status" aria-label="Loading times" className="s20-skeletons"><div/></div>:av.slots.length?<div className="s32-slots" role="radiogroup" aria-labelledby="s32-times">{av.slots.map(s=>{const t=slotTime(s,av.iana_timezone),on=s.slot_id===selected?.slot_id,firstAvailable=av.slots.find(x=>x.status==='available')?.slot_id;return <button key={s.slot_id} className="s32-slot" data-slot={s.slot_id} role="radio" aria-checked={on} tabIndex={s.status!=='available'?-1:selected?on?0:-1:s.slot_id===firstAvailable?0:-1} disabled={s.status!=='available'} onClick={()=>selectSlot(s)} onKeyDown={e=>slotKey(e,s)}>{t.day}<small>{t.time}<br/>{s.duration_minutes} min · {money(s.price_paise,s.currency)}{s.status!=='available'&&<><br/>{s.status}</>}</small></button>;})}</div>:<section className="s20-empty"><span className="s20-state-icon s32-green"><Calendar size={20}/></span><h3>{sp.get('date')||sp.get('offset')?'No open times in this window.':'No open times right now.'}</h3><p>{sp.get('date')?'Clear the day filter to see upcoming available times.':'No available times were returned for this window.'}</p><div className="s20-actions"><Link className="s20-btn" to="/s-31"><span className="s20-action-icon"><Mentors/></span>Find a mentor</Link></div></section>}
+    </section>
+    {av&&(av.offset>0||av.slots.length===av.limit)&&<nav className="s20-pager" aria-label="Availability pages"><button className="s20-btn" disabled={av.offset===0} onClick={()=>change('offset',String(Math.max(0,av.offset-av.limit)),true)}>Previous times</button><button className="s20-btn" disabled={av.slots.length<av.limit} onClick={()=>change('offset',String(av.offset+av.limit),true)}>Check next times</button><p>Showing this server page; a further page may be empty.</p></nav>}
+    <button className="s20-btn s20-primary s32-continue" disabled={!selected||busy} aria-describedby="s32-slot-help" onClick={()=>{if(!selected||busy||continuing.current)return;continuing.current=true;nav(`/s-33?slot=${encodeURIComponent(selected.slot_id)}&tutor=${encodeURIComponent(id)}`);}}><span className="s20-action-icon"><Calendar/></span>Continue to booking</button><p id="s32-slot-help" className="s32-source">Times are shown in {zone}. Choosing a time does not reserve or charge anything.</p>
+   </>}
+  </main><aside aria-label="Booking"><section className="s20-card"><h2 className="s20-eyebrow" id="s32-booking">Booking</h2><div className="s32-aside-price"><span>Price per session</span><b>{tutor?money(tutor.session_price_paise,tutor.currency):'Unavailable'}</b></div><p>Choosing a time does not charge you. The next step holds the slot and shows the exact amount before payment.</p></section></aside></div>
+  <footer><span>Privacy Notice</span><span>·</span><span>Terms</span><span>·</span><span>Accessibility</span></footer>
+ </div>;
+}

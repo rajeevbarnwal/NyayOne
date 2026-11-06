@@ -1,3 +1,4 @@
+import {withoutS32ProposalsForTest} from './nyay66-s32-exceptions.test-fixture.mjs';
 import {describe,it,expect} from 'vitest';
 import {readFileSync,readdirSync} from 'node:fs';
 import {execFileSync} from 'node:child_process';
@@ -11,7 +12,7 @@ const beforeBytes=execFileSync('git',['show','1ea4890a2329edebc485f6fb3b89bc3962
 const baseline=JSON.parse(beforeBytes),historical=JSON.stringify(baseline.exceptions);
 const target=baseline.exceptions.findIndex(e=>canonical(e)===canonical(predecessor));
 const candidate=()=>{const p=structuredClone(baseline);p.exceptions[target]=structuredClone(replacement);return p;};
-const boundary=p=>expect(JSON.stringify(normalizeS31Page2ForTest(p.exceptions))).toBe(historical);
+const boundary=p=>expect(JSON.stringify(normalizeS31Page2ForTest(withoutS32ProposalsForTest(p.exceptions)))).toBe(historical);
 const record=e=>JSON.stringify(e,null,2).replace(/^/gm,'    ');
 const options={s31:true};
 
