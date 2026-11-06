@@ -19,13 +19,50 @@ async function using(run,options={}){
   if(u.pathname==='/api/v1/auth/student/session')return reply(s.signedOut?{authenticated:false,actor:null}:{authenticated:true,actor});
   if(r.method()==='GET'&&u.pathname.startsWith('/api/v1/tutors/')){
    const av=u.pathname.endsWith('/availability');s.reads.push({av,q:Object.fromEntries(u.searchParams),path:u.pathname});const status=av?s.availabilityStatus:s.profileStatus;if(status===401)s.signedOut=true;
-   const body=status!==200?{detail:{code:status===401?'authentication_required':status===404?'NOT_FOUND':'server_error',retry_after_seconds:s.retryAfter??0}}:av?{tutor_id:mentor.id,iana_timezone:u.searchParams.get('timezone'),window:{from_utc:null,to_utc:null},local_resolution:s.resolution??{},slots:s.slots.map(x=>({...x,iana_timezone:u.searchParams.get('timezone')})),limit:50,offset:Number(u.searchParams.get('offset'))}:s.profile;
+   const body=status!==200?{detail:{code:status===401?'authentication_required':status===404?'NOT_FOUND':'server_error',retry_after_seconds:s.retryAfter??0}}:av?{tutor_id:s.profile.id,iana_timezone:u.searchParams.get('timezone'),window:{from_utc:null,to_utc:null},local_resolution:s.resolution??{},slots:s.slots.map(x=>({...x,iana_timezone:u.searchParams.get('timezone')})),limit:50,offset:Number(u.searchParams.get('offset'))}:s.profile;
    const done=()=>reply(body,status);if(s.hold=== (av?'availability':'profile')){s.hold=null;s.held.push(done);return;}return done();
   }
   s.unexpected.push(`${r.method()} ${u.pathname}`);return route.abort();
  });try{await run(p,s);assert.deepEqual(s.unexpected,[]);}finally{await ctx.close();}
 }
 const ready=async p=>{await p.getByRole('heading',{name:'Synthetic Mentor',exact:true}).waitFor();await p.getByRole('radiogroup').waitFor();};
+for(const mode of ['same-task burst','double-click','double-Enter','double-Space'])it(`S32-QA-1: Continue ${mode} navigates once and Back permits a fresh choice`,()=>using(async(p,s)=>{
+ // Observe real router history; only S-33-owned transport is substituted.
+ await p.route('**/api/v1/tutoring/booking-holds',r=>r.fulfill({status:503,contentType:'application/json',body:JSON.stringify({detail:{code:'service_unavailable'}})}));
+ await p.goto(origin+'/s-32?tutor=mentor-a');await ready(p);await p.getByRole('radio').first().click();
+ const count=await p.evaluate(()=>history.length),button=p.getByRole('button',{name:'Continue to booking',exact:true});
+ if(mode==='same-task burst')await button.evaluate(e=>{e.click();e.click();});
+ if(mode==='double-click')await button.dblclick();
+ if(mode==='double-Enter'||mode==='double-Space'){await button.focus();await p.keyboard.press(mode==='double-Enter'?'Enter':'Space');await p.keyboard.press(mode==='double-Enter'?'Enter':'Space');}
+ await p.waitForURL(/\/s-33\?/);assert.equal(await p.evaluate(()=>history.length),count+1);
+ assert.equal(new URL(p.url()).searchParams.get('slot'),'slot-a');assert.equal(new URL(p.url()).searchParams.get('tutor'),'mentor-a');
+ await p.goBack();await p.waitForURL(/\/s-32\?/);await ready(p);
+ assert.equal(await p.getByRole('button',{name:'Continue to booking',exact:true}).isDisabled(),true);
+ await p.getByRole('radio').nth(1).click();await p.getByRole('button',{name:'Continue to booking',exact:true}).click();await p.waitForURL(/\/s-33\?/);
+ assert.equal(new URL(p.url()).searchParams.get('slot'),'slot-b');assert.ok(s.reads.length>=2);
+}));
+it('S32-QA-2: uppercase UUID renders canonical server identity and slots',()=>using(async(p,s)=>{
+ const id='abcdefab-1234-4567-89ab-abcdef123456';s.profile={...mentor,id,rating_aggregate:{...mentor.rating_aggregate,tutor_id:id}};s.slots=[{...slot(),tutor_id:id}];
+ await p.goto(origin+`/s-32?tutor=${id.toUpperCase()}`);await ready(p);
+ assert.ok(s.reads.every(r=>r.path.includes(id)));assert.equal(await p.getByRole('alert').count(),0);
+}));
+it('S32-QA-3: malformed mentor link has relevant recovery without a futile Retry',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-32?tutor=not-a-uuid');const alert=p.getByRole('alert');await alert.waitFor();
+ assert.match(await alert.innerText(),/Check the mentor link or find another mentor\./);assert.match(await alert.innerText(),/HTTP 422/);assert.doesNotMatch(await alert.innerText(),/timezone|date or window/);
+ assert.equal(await alert.getByRole('button',{name:'Retry',exact:true}).count(),0);assert.equal(await alert.getByRole('link',{name:'Find a mentor',exact:true}).getAttribute('href'),'/s-31');
+ assert.equal(await alert.evaluate(e=>e===document.activeElement),true);assert.equal(s.reads.length,1);
+},{profileStatus:422}));
+it('S32-QA-3 control: availability 422 retains timezone guidance and recovery',()=>using(async p=>{
+ await p.goto(origin+'/s-32?tutor=mentor-a&tz=Bad/Zone');const alert=p.getByRole('alert');await alert.waitFor();
+ assert.match(await alert.innerText(),/Check the timezone, date or window/);assert.equal(await p.getByLabel('Show times in',{exact:true}).count(),1);assert.equal(await alert.getByRole('button',{name:'Retry availability',exact:true}).count(),1);
+},{availabilityStatus:422}));
+it('S32-QA-4: empty timezone retains the device default and never adds a blank option',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-32?tutor=mentor-a&tz=');await ready(p);assert.equal(s.reads.find(r=>r.av).q.timezone,'Europe/London');
+ assert.equal(await p.getByLabel('Show times in',{exact:true}).inputValue(),'Europe/London');assert.equal(await p.locator('#s32-zone option[value=""]').count(),0);
+}));
+it('S32-QA-5: injected zero profile price fails closed without showing free tutoring',()=>using(async(p,s)=>{
+ await p.goto(origin+'/s-32?tutor=mentor-a');await p.getByRole('alert').waitFor();assert.doesNotMatch(await p.locator('main').innerText(),/₹0|HTTP 200|HTTP 500/);assert.equal(await p.getByRole('radiogroup').count(),0);assert.equal(s.reads.length,1);
+},{profile:{...mentor,session_price_paise:0}}));
 async function held(s){for(let i=0;!s.held.length&&i<400;i++)await delay(10);assert.ok(s.held.length);}
 it('Revision L detail uses server facts, one main, device zone and selection before booking',()=>using(async(p,s)=>{
  await p.goto(origin+'/s-32?tutor=mentor-a');await ready(p);assert.equal(await p.locator('main').count(),1);assert.equal(await p.locator('.ls-shell').count(),0);assert.match(await p.locator('main').innerText(),/5.00 from 1 rating\b/);assert.match(await p.locator('main').innerText(),/₹899.50/);
