@@ -46,9 +46,10 @@ import {
   SchoolCompare,
   SchoolSavedFollowed,
 } from './schools/SchoolScreens';
+import {S33Booking} from './tutoring/S33Booking';
 import { S32Detail } from './tutoring/S32Detail';
 import { S31Discovery } from './tutoring/S31Discovery';
-import { BookingHoldScreen, SessionConfirmed } from './tutoring/BookingScreens';
+import { SessionConfirmed } from './tutoring/BookingScreens';
 import { SessionLifecycle } from './tutoring/SessionScreens';
 import { ExamOverview, ExamSyllabus, ExamMock, ExamResult, ExamReview, ExamAnalytics } from './exam/ExamScreens';
 import { ClinicalLog, ClinicalAdd, ClinicalPending, ClinicalVerified, ClinicalExport } from './clinical/ClinicalScreens';
@@ -117,7 +118,7 @@ export const studentScreens: Record<string, ComponentType<StudentScreenProps>> =
   // tutoring/detail (session), tutoring/session (SAATHI-65 + SAATHI-66)
   'S-31': S31Discovery,
   'S-32': S32Detail,
-  'S-33': BookingHoldScreen,
+  'S-33': S33Booking,
   'S-34': SessionConfirmed,
   'S-35': SessionLifecycle,
   // S10 community (SAATHI-74)
