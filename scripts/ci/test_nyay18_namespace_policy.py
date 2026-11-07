@@ -126,10 +126,10 @@ class NamespacePolicyTests(unittest.TestCase):
     def test_repository_shipped_surface_passes_sealed_contract(self) -> None:
         report = policy.audit(policy.ROOT, policy.load_contract())
         self.assertEqual(report.failures, ())
-        self.assertEqual(report.source_inventory_count, 219)
+        self.assertEqual(report.source_inventory_count, 220)
         self.assertEqual(
             report.source_inventory_sha256,
-            "f5a1dbe51333979519b6f8b1fd11707da11e96d26c6fd9ef19eded2c7b307001",
+            "4b8e39c96eafedb58ea00a766c5e18c32e3978542f5a3d041e12abf481cf510c",
         )
         self.assertTrue(report.self_test_passed)
 
