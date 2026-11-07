@@ -32,6 +32,7 @@ import {loadS31Cache} from './lib/nyay66-s31-import.mjs';
 import {captureS31Rows} from './lib/nyay66-s31-live.mjs';
 import {loadS32Cache} from './lib/nyay66-s32-import.mjs';
 import {loadS33Cache} from './lib/nyay66-s33-import.mjs';
+import {loadS34Cache} from './lib/nyay66-s34-import.mjs';
 import {captureS32Rows} from './lib/nyay66-s32-live.mjs';
 import {captureS33Rows} from './lib/nyay66-s33-live.mjs';
 import {inspectSurface} from './lib/nyay66-dom.mjs';
@@ -62,6 +63,7 @@ const s30=await loadS30Cache(root,config.s30,continuation,manifest.fonts);
 const s31=await loadS31Cache(root,config.s31,continuation,manifest.fonts);
 const s32=await loadS32Cache(root,config.s32,continuation,manifest.fonts);
 const s33=await loadS33Cache(root,config.s33,continuation,manifest.fonts);
+const s34=await loadS34Cache(root,config.s34,continuation,manifest.fonts);
 const coverageOptions={r2:!!r2,s18:!!s18,s19:!!s19,s20:!!s20,s21:!!s21,s25:!!s25,s26:!!s26,s27:!!s27,s28:!!s28,s29:!!s29,s30:!!s30,s31:!!s31,s32:!!s32,s33:!!s33};
 const out=resolve(process.env.NYAY66_OUTPUT||resolve(root,'frontend/artifacts/nyay66-live'));
 await mkdir(dirname(out),{recursive:true});await mkdir(out);
@@ -224,6 +226,7 @@ try{
     report.s33Reference={cache:config.s33.cache,manifestSha256:config.s33.manifestSha256,provenance:s33.provenance};
     report.rows.push(...await captureS33Rows({browser,origin,out,reference:s33}));
   }
+  if(s34)report.s34Reference={cache:config.s34.cache,manifestSha256:config.s34.manifestSha256,provenance:s34.provenance};
   report.rows.push(...coverage('dark').flatMap(item=>VIEWPORTS.map(vp=>({screen:item.screen,viewport:vp.id,theme:'dark',verdict:'DESIGN-GAP',executed:false}))));
   Object.assign(report,finalizeEnforcement(report.rows,config,comments,coverageOptions));
   Object.assign(report,appendContinuation(report,continuation,{s18:!!s18,s19:!!s19,s20:!!s20,s21:!!s21,s25:!!s25,s26:!!s26,s27:!!s27,s28:!!s28,s29:!!s29,s30:!!s30,s31:!!s31,s32:!!s32,s33:!!s33}));
