@@ -1100,7 +1100,7 @@ describe('NYAY-5 browser release-gate source contract', () => {
   it('scopes the Revision L heading and labelled-lockup census to the twenty-six approved screens', () => {
     const runner = readFileSync(RUNNER, 'utf8');
     expect(stringArrayConstant(runner, 'REVISION_L_VISUAL_SCREEN_IDS')).toEqual([
-      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-18', 'S-19', 'S-20', 'S-21', 'S-25', 'S-26', 'S-27', 'S-28', 'S-29', 'S-30', 'S-31', 'S-32',
+      'S-03', 'S-04', 'S-05', 'S-07', 'S-08', 'S-09', 'S-10', 'S-11', 'S-12', 'S-13', 'S-14', 'S-15', 'S-16', 'S-17', 'S-18', 'S-19', 'S-20', 'S-21', 'S-25', 'S-26', 'S-27', 'S-28', 'S-29', 'S-30', 'S-31', 'S-32', 'S-33',
     ]);
     expect(stringArrayConstant(runner, 'REVISION_L_HEADING_STACK')).toEqual([
       'aptos', 'calibri', 'nyayone revision l heading', 'system-ui', 'sans-serif',
@@ -1195,7 +1195,7 @@ describe('NYAY-5 browser release-gate source contract', () => {
       })).toMatchObject({ typographyExact: true, iconsExact: true });
     });
 
-  it.each(['S-17', 'S-18', 'S-19', 'S-20', 'S-21', 'S-25', 'S-26', 'S-27', 'S-28', 'S-29', 'S-30', 'S-31', 'S-32'])('rejects the legacy font on %s while retaining the S-22 legacy negative control', async screenId => {
+  it.each(['S-17', 'S-18', 'S-19', 'S-20', 'S-21', 'S-25', 'S-26', 'S-27', 'S-28', 'S-29', 'S-30', 'S-31', 'S-32', 'S-33'])('rejects the legacy font on %s while retaining the S-22 legacy negative control', async screenId => {
     expect(await visualCensus({ screenId,
       family: 'Aptos, Calibri, Carlito, system-ui, sans-serif',
     })).toMatchObject({ typographyExact: false, iconsExact: true });
@@ -1204,10 +1204,19 @@ describe('NYAY-5 browser release-gate source contract', () => {
     })).toMatchObject({ typographyExact: true, iconsExact: false });
   });
 
-  it.each(['S-18', 'S-19', 'S-20', 'S-21', 'S-25', 'S-26', 'S-27', 'S-28', 'S-29', 'S-30', 'S-31', 'S-32'])('recognizes the exact %s Revision L heading and labelled logo', async screenId => {
+  it.each(['S-18', 'S-19', 'S-20', 'S-21', 'S-25', 'S-26', 'S-27', 'S-28', 'S-29', 'S-30', 'S-31', 'S-32', 'S-33'])('recognizes the exact %s Revision L heading and labelled logo', async screenId => {
     expect(await visualCensus({ screenId,
       family: 'Aptos, Calibri, "NyayOne Revision L Heading", system-ui, sans-serif',
     })).toMatchObject({ typographyExact: true, iconsExact: true });
+  });
+
+  it('recognizes only the three S-33 Revision L eyebrow headings', async () => {
+    for (const id of ['s33-summary', 's33-policy', 's33-payment']) {
+      const eyebrow = { id, class: 's20-eyebrow' };
+      expect((await visualCensus({ screenId: 'S-33', eyebrow, family: 'Space Grotesk, sans-serif' })).typographyExact).toBe(true);
+      for (const mutant of [{ id: 'other' }, { class: 'other' }, { tagName: 'H1' }]) expect((await visualCensus({ screenId: 'S-33', eyebrow: { ...eyebrow, ...mutant }, family: 'Space Grotesk, sans-serif' })).typographyExact).toBe(false);
+      expect((await visualCensus({ screenId: 'S-34', eyebrow, family: 'Space Grotesk, sans-serif' })).typographyExact).toBe(false);
+    }
   });
 
   it('recognizes only the three S-32 Revision L eyebrow headings', async () => {

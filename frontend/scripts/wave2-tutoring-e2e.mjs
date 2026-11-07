@@ -1284,8 +1284,8 @@ async function shot(page, name, { fullPage = true } = {}) {
 
 /* ------------------------------------------------------------- dom readers */
 
-const BANNER = '.tt-banner';
-const CODE_SEL = 'code.tt-banner__code';
+const BANNER = '.tt-banner, .s33-booking [role="alert"]';
+const CODE_SEL = 'code.tt-banner__code, .s33-booking code[data-error-code]';
 
 async function banners(page) {
   return page.$$eval(BANNER, (els) =>
@@ -1294,7 +1294,7 @@ async function banners(page) {
       role: el.getAttribute('role'),
       title: el.querySelector('.tt-banner__t')?.textContent?.trim() || null,
       detail: el.querySelector('.tt-banner__d')?.textContent?.trim() || null,
-      code: el.querySelector('code.tt-banner__code')?.textContent?.trim() || null,
+      code: el.querySelector('code.tt-banner__code, code[data-error-code]')?.textContent?.trim() || null,
     })),
   );
 }
@@ -1365,7 +1365,7 @@ function takeSlot(bucket = 'gt24h') {
  * is clicked and the confirmed session id is read back off the wire.
  */
 async function bookInBrowser(page, slot, tag) {
-  await go(page, `${WEB}/s-33?slot=${slot.slot_id}&tutor=${slot.tutor_id}`, 'div.tt-hold[role="timer"]');
+  await go(page, `${WEB}/s-33?slot=${slot.slot_id}&tutor=${slot.tutor_id}`, '.s33-held');
   if (tag) await shot(page, `${tag}_hold`);
 
   // The order response is awaited, not polled: the promise is armed before the
@@ -1373,12 +1373,12 @@ async function bookInBrowser(page, slot, tag) {
   const order = await withApi(
     page,
     { method: 'POST', route: '/api/v1/payments/orders', maxStatus: 300 },
-    async () => page.locator('button.tt-btn--jade', { hasText: /securely/ }).click(),
+    async () => page.getByRole('button', { name: 'Create payment order', exact: true }).click(),
   );
   const orderRef = order.json?.provider_order_ref;
   if (!orderRef) throw new Error(`no provider_order_ref on POST /payments/orders (status ${order.status})`);
   await page.waitForFunction(
-    () => /Order reference|Waiting for the provider/.test(document.body.textContent),
+    () => /Order reference|Waiting for the payment provider/.test(document.body.textContent),
     undefined,
     { timeout: 20000 },
   );
@@ -1391,9 +1391,9 @@ async function bookInBrowser(page, slot, tag) {
   const created = await withApi(
     page,
     { method: 'POST', route: '/api/v1/tutoring/sessions', maxStatus: 300 },
-    async () => page.locator('button.tt-btn--jade', { hasText: /Check payment and confirm/ }).click(),
+    async () => page.getByRole('button', { name: 'Check payment', exact: true }).click(),
   );
-  await page.waitForSelector('a.tt-btn--jade:has-text("View your confirmed session")', { timeout: 20000 });
+  await page.waitForSelector('.s33-booking a:has-text("View session")', { timeout: 20000 });
   await settled(page);
   if (tag) await shot(page, `${tag}_confirmed`);
 
@@ -1775,8 +1775,11 @@ async function stageC(page) {
   const booked = await bookInBrowser(page, slot, 'c1_s33');
   arts.push('c1_s33_hold.png', 'c1_s33_order.png', 'c1_s33_confirmed.png');
 
-  // in-product route to S-34: dock link -> S-35 list -> Open -> Receipt
-  await page.locator('a.tt-btn--jade:has-text("View your confirmed session")').click();
+  // The new View session goes straight to S-34. Continue through its existing
+  // All my sessions link so the original list/manage/receipt assertions still run.
+  await page.locator('.s33-booking a:has-text("View session")').click();
+  await page.waitForFunction(() => location.pathname === '/s-34', { timeout: 15000 });
+  await page.getByRole('link', { name: 'All my sessions', exact: true }).click();
   await page.waitForSelector('article.tt-tut', { timeout: 20000 });
   await settled(page);
   arts.push(await shot(page, 'c2_s35_list_after_booking'));
@@ -3137,14 +3140,14 @@ async function stageNeg1(page) {
       { method: 'POST', route: '/api/v1/tutoring/booking-holds', status: 201 },
       () => page.goto(`${WEB}/s-33?slot=${slot.slot_id}&tutor=${slot.tutor_id}`, { waitUntil: 'domcontentloaded' }),
     );
-    await page.waitForSelector('div.tt-hold[role="timer"]', { timeout: 20000 });
+    await page.waitForSelector('.s33-held', { timeout: 20000 });
     await settled(page);
     const holdId = mount.json?.id;
     const shift = fixtureCmd(['expire-hold', holdId]);
     const seen = await expecting(
       [{ kind: 'http', method: 'POST', route: '/api/v1/payments/orders', status: 409, code: 'HOLD_EXPIRED' }],
       async () => {
-        await page.locator('button.tt-btn--jade', { hasText: /securely/ }).click();
+        await page.getByRole('button', { name: 'Create payment order', exact: true }).click();
         await page.waitForSelector(CODE_SEL, { timeout: 20000 });
         await settled(page);
       },
@@ -3166,10 +3169,15 @@ async function stageNeg1(page) {
   // --- N02 competing slot conflict -----------------------------------------
   try {
     const slot = takeSlot('gt24h');
-    const rival = await api('POST', '/api/v1/tutoring/booking-holds', {
-      sub: RIVAL,
-      body: { slot_id: slot.slot_id, idempotency_key: `rival-${Date.now()}` },
-    });
+    let rival;
+    await page.route(`**/api/v1/tutors/${slot.tutor_id}/availability?*`, async route => {
+      const response = await route.fetch();
+      rival = await api('POST', '/api/v1/tutoring/booking-holds', {
+        sub: RIVAL,
+        body: { slot_id: slot.slot_id, idempotency_key: `rival-${Date.now()}` },
+      });
+      await route.fulfill({ response });
+    }, { times: 1 });
     const seen = await expecting(
       [{ kind: 'http', method: 'POST', route: '/api/v1/tutoring/booking-holds', status: 409 }],
       async () => {
@@ -3195,13 +3203,13 @@ async function stageNeg1(page) {
   // --- N03 provider / payment failure --------------------------------------
   try {
     const slot = takeSlot('gt24h');
-    await go(page, `${WEB}/s-33?slot=${slot.slot_id}&tutor=${slot.tutor_id}`, 'div.tt-hold[role="timer"]');
+    await go(page, `${WEB}/s-33?slot=${slot.slot_id}&tutor=${slot.tutor_id}`, '.s33-held');
     const order = await withApi(
       page,
       { method: 'POST', route: '/api/v1/payments/orders', status: 201 },
-      () => page.locator('button.tt-btn--jade', { hasText: /securely/ }).click(),
+      () => page.getByRole('button', { name: 'Create payment order', exact: true }).click(),
     );
-    await page.waitForFunction(() => /Order reference|Waiting for the provider/.test(document.body.textContent), { timeout: 20000 });
+    await page.waitForFunction(() => /Order reference|Waiting for the payment provider/.test(document.body.textContent), { timeout: 20000 });
     await settled(page);
     const declined = await payWebhook(order.json.provider_order_ref, { eventType: 'failed' });
     const seen = await expecting(
@@ -3209,7 +3217,7 @@ async function stageNeg1(page) {
        { kind: 'http', method: 'POST', route: '/api/v1/tutoring/sessions', status: 400, code: 'PAYMENT_UNVERIFIED' },
        { kind: 'http', method: 'POST', route: '/api/v1/tutoring/sessions', status: 409, code: 'SESSION_STATE_INVALID' }],
       async () => {
-        await page.locator('button.tt-btn--jade', { hasText: /Check payment and confirm/ }).click();
+        await page.getByRole('button', { name: 'Check payment', exact: true }).click();
         await page.waitForSelector(CODE_SEL, { timeout: 20000 });
         await settled(page);
       },
