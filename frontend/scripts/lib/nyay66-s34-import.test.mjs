@@ -79,12 +79,13 @@ describe('S-34 archive import fails closed before writing',()=>{
       await expect(loadS34Cache(f.dir,config,data,fonts)).rejects.toThrow('S34_ARTIFACT_CHECKSUM_MISMATCH');
     }finally{rmSync(f.dir,{recursive:true,force:true});}
   });
-  it('loads the bound reference cache in the hosted gate without claiming product capture',()=>{
+  it('loads the bound reference cache before separately executing product capture',()=>{
     const live=readFileSync(join(root,'frontend/scripts/nyay66-live.mjs'),'utf8');
     expect(live).toContain("import {loadS34Cache} from './lib/nyay66-s34-import.mjs'");
     expect(live).toContain('await loadS34Cache(root,config.s34,continuation,manifest.fonts)');
     expect(live).toContain('report.s34Reference={cache:config.s34.cache,manifestSha256:config.s34.manifestSha256,provenance:s34.provenance}');
-    expect(live).not.toContain('captureS34Rows');
+    expect(live).toContain('await captureS34Rows({browser,origin,out,reference:s34})');
+    expect(live.indexOf('await captureS34Rows')).toBeGreaterThan(live.indexOf('await loadS34Cache'));
   });
   it('pins all 12 references and exact owner-dispatch provenance while preserving every historical setting and exception byte',async()=>{
     const got=await loadS34Cache(root,policy.s34,data,fonts);
