@@ -59,10 +59,10 @@ export async function mockS34Application(page,state,origin,errors){
  const viewportFraming=await frameS34Viewport(page,state);
  if(!verifyS34Requests(state,apiRequests))throw Error('S34_REQUEST_SEQUENCE_MISMATCH');
  const snapshot=await page.evaluate(()=>({id:new URLSearchParams(location.search).get('session'),path:location.pathname,text:document.querySelector('main')?.textContent??'',
-  heading:document.querySelector('h1')?.textContent,facts:[...document.querySelectorAll('.s34-facts dd')].map(e=>e.textContent),notice:document.querySelector('.s34-notice h2')?.textContent??null,
+  heading:document.querySelector('h1')?.textContent,timeInstants:[...document.querySelectorAll('.s34-facts time')].map(e=>e.getAttribute('datetime')),facts:[...document.querySelectorAll('.s34-facts dd')].map(e=>e.textContent),notice:document.querySelector('.s34-notice h2')?.textContent??null,
   manage:document.querySelector('a[href*="view=detail"]')?.getAttribute('href')??null,code:document.querySelector('.s20-code')?.textContent??null,loading:!!document.querySelector('[data-loading]'),focusRole:document.activeElement?.getAttribute('role'),scroll:[scrollX,scrollY]}));
  const loaded=['confirmed','pending-provider','cancelled'].includes(state),e=s34HttpError(state);
- const sessionIdentityVerified=snapshot.id===ID&&snapshot.path==='/s-34'&&(!loaded||canonical(snapshot.facts)===canonical([wire.start_local,wire.end_local,wire.iana_timezone,wire.order_id]));
+ const sessionIdentityVerified=snapshot.id===ID&&snapshot.path==='/s-34'&&(!loaded||(canonical(snapshot.facts)===canonical(['Tue 18 Aug 2026, 6:30 PM','7:15 PM',wire.iana_timezone,wire.order_id])&&canonical(snapshot.timeInstants)===canonical([wire.start_utc,wire.end_utc])));
  const noInventedPaymentOrJoin=!/₹|Confirmed and paid|Join now|refund|receipt/i.test(snapshot.text)&&snapshot.manage===(state==='confirmed'?`/s-35?session=${ID}&view=detail`:null)&&snapshot.heading==='Session.';
  const serverConfirmationVerified=!premature&&(loaded?snapshot.notice===({confirmed:'Confirmed.','pending-provider':'Not confirmed yet.',cancelled:'This session was cancelled.'}[state]):snapshot.facts.length===0&&snapshot.loading===(state==='loading'))&&(!e||snapshot.code===`HTTP ${e.status} · ${e.code}`);
  if(!sessionIdentityVerified||!noInventedPaymentOrJoin||!serverConfirmationVerified)throw Error(`S34_LIVE_PROOF_MISSING:${JSON.stringify(snapshot)}`);
