@@ -51,3 +51,34 @@
 .s35-lifecycle.st-tutoring .tt-live .tt-nm,.s35-lifecycle.st-tutoring .tt-live .tt-nm2,.s35-lifecycle.st-tutoring .tt-live .tt-veil{color:var(--tt-studiotx)}
 
 .s35-lifecycle.st-tutoring .s35-cancel-error{display:flex;flex-direction:column;gap:10px}
+
+/* S-35 presentation repair: opaque notice surfaces stay readable over any media. */
+.s35-lifecycle.st-tutoring .tt-live .tt-rbanner{background:#fff;color:var(--tt-ink2);border-color:var(--tt-line2)}
+.s35-lifecycle.st-tutoring .tt-live .tt-rbanner--warn{border-color:var(--tt-gold)}
+.s35-lifecycle.st-tutoring .tt-live .tt-rbanner--err{border-color:var(--tt-risk)}
+.s35-lifecycle.st-tutoring .tt-live .tt-rbanner .tt-banner__t{color:var(--tt-ink2)}
+.s35-lifecycle.st-tutoring .tt-live .tt-rbanner .tt-banner__d{color:var(--tt-mut)}
+.s35-lifecycle.st-tutoring .tt-live .tt-tstate{background:#fff;color:var(--tt-ink2);border-color:var(--tt-line2)}
+.s35-lifecycle.st-tutoring .tt-live .tt-tstate--g{background:var(--tt-jadeq);color:var(--tt-jade);border-color:var(--tt-jade)}
+.s35-lifecycle.st-tutoring .tt-live .tt-tstate--t{background:var(--tt-goldq);color:var(--tt-gold);border-color:var(--tt-gold)}
+.s35-lifecycle.st-tutoring .tt-live .tt-tstate--r{background:var(--tt-riskq);color:var(--tt-risk);border-color:var(--tt-risk)}
+.s35-lifecycle.st-tutoring .tt-preview{background:#1c2454;border:0;border-radius:14px;aspect-ratio:auto;height:170px;min-height:170px;max-height:none}
+.s35-lifecycle.st-tutoring .tt-preview__off{background:#1c2454;color:#efedf6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:400}
+.s35-lifecycle.st-tutoring .tt-preview__off .tt-ic{width:28px;height:28px;flex:none}
+.s35-lifecycle.st-tutoring .s35-section-heading{display:flex;align-items:center;gap:10px}
+.s35-lifecycle.st-tutoring .tt-slotbtn .tt-sl{font-family:var(--tt-body);font-size:13px;font-weight:700}
+.s35-lifecycle.st-tutoring .s35-review textarea{background:#fff;border:1.5px solid var(--tt-line2);border-radius:12px;padding:12px 13px;resize:vertical}
+.s35-lifecycle.st-tutoring .s35-review legend,.s35-lifecycle.st-tutoring .s35-review label[for]{font-size:12px;font-weight:700;color:var(--tt-ink2)}
+.s35-lifecycle.st-tutoring .s35-review .s35-review-help{font-size:11.5px;color:var(--tt-mut);line-height:1.45}
+.s35-lifecycle.st-tutoring .s35-heading-icon--review{background:var(--tt-goldq);color:var(--tt-gold)}
+.s35-lifecycle.st-tutoring .s35-review section[aria-label="Delete review confirmation"]{display:flex;flex-direction:column;gap:10px}
+.s35-lifecycle.st-tutoring .s35-review section[aria-label="Delete review confirmation"] h3{margin:0}
+.s35-lifecycle.st-tutoring .s35-state-card{border:1.5px dashed var(--tt-line2);border-radius:16px;background:#fff;padding:22px 16px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px}
+.s35-lifecycle.st-tutoring .s35-state-card h2{margin:0;font-size:17px}
+.s35-lifecycle.st-tutoring .s35-state-card p{margin:0;font-size:13px;color:var(--tt-mut);line-height:1.5;max-width:38ch}
+.s35-lifecycle.st-tutoring .s35-state-card .tt-btn{background:var(--tt-indigo);border-color:var(--tt-indigo);color:#fff;margin-top:4px;max-width:100%}
+.s35-lifecycle.st-tutoring .s35-state-card--error .tt-banner{border:0;padding:0;flex-direction:column;align-items:center;gap:10px}
+.s35-lifecycle.st-tutoring .s35-state-card--error .tt-banner>.tt-ic{box-sizing:content-box;padding:6px;width:20px;height:20px;background:var(--tt-riskq);border-radius:9px;color:var(--tt-risk)}
+.s35-lifecycle.st-tutoring .s35-state-card--error .tt-banner__t{font-family:var(--tt-display);font-size:17px;font-weight:800;line-height:1.15;color:var(--tt-ink)}
+.s35-lifecycle.st-tutoring .s35-state-card--error .tt-banner__d{font-size:13px;line-height:1.5;margin-top:10px;max-width:38ch}
+.s35-lifecycle.st-tutoring .s35-heading-icon--risk{background:var(--tt-riskq);color:var(--tt-risk)}

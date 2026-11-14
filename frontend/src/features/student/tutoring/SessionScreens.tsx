@@ -225,14 +225,15 @@ function SessionList({ go }: { go: Go }) {
       </div>
 
       {query.isPending && <LoadingState what="your sessions" />}
-      {query.isError && <TypedErrorState error={query.error} onRecover={() => query.refetch()} />}
+      {query.isError && <div className="s35-state-card s35-state-card--error"><TypedErrorState error={query.error} onRecover={() => query.refetch()} /></div>}
 
       {query.isSuccess && query.data.items.length === 0 && (
-        <EmptyState
-          title="Nothing here yet"
-          detail="When you book a mentor, the session appears here with its join, reschedule and cancel actions."
-          action={<Link className="tt-btn tt-btn--block" to="/s-31">Find a mentor</Link>}
-        />
+        <section className="s35-state-card">
+          <span className="s35-heading-icon"><Ic name="cal" /></span>
+          <h2>Nothing here yet</h2>
+          <p>When you book a mentor, the session appears here with its join, reschedule and cancel actions.</p>
+          <Link className="tt-btn tt-btn--jade" to="/s-31"><Ic name="search" />Find a mentor</Link>
+        </section>
       )}
 
       {query.isSuccess && query.data.items.map((session) => (
@@ -311,11 +312,11 @@ function SessionDetailViews({
   if (query.isError) {
     return (
       <TutoringScreen screenId="S-35">
-        <TypedErrorState
+        <div className="s35-state-card s35-state-card--error"><TypedErrorState
           error={query.error}
           recoveryLabel="Back to my sessions"
           onRecover={() => go('list', '')}
-        />
+        /></div>
       </TutoringScreen>
     );
   }
@@ -715,7 +716,7 @@ function RescheduleView({
     >
       {announceRegion}
       <SessionHeading session={session} />
-      <h2 className="tt-h">Choose a new time</h2>
+      <h2 className="tt-h s35-section-heading"><span className="s35-heading-icon"><Ic name="cal" /></span>Choose a new time</h2>
       <p className="tt-p">
         Times are shown in {session.ianaTimezone}, the zone kept with your session. Your payment
         moves with you and nothing is charged again.
@@ -1253,8 +1254,8 @@ function PreJoinView({ session, go }: { session: TutoringSession; go: Go }) {
       {announceRegion}
       <div>
         <div className="tt-eyebrow">Before you enter</div>
-        <h1 className="tt-h tt-arrival" style={{ marginTop: '4px', fontSize: '19px' }}>
-          Room entry check
+        <h1 className="tt-h tt-arrival">
+          <span className="s35-heading-icon"><Ic name="cal" /></span>Room entry check
         </h1>
         <p className="tt-p" style={{ fontSize: '12.5px' }}>
           {labels.sessionZone} · {labels.sessionZoneLabel}
