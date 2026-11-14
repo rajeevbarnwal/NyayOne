@@ -49,3 +49,5 @@
 .s35-lifecycle.st-tutoring .tt-live .tt-veil{background:rgba(28,36,84,.88)}
 @media(min-width:900px){.s35-lifecycle.st-tutoring h1.tt-h{font-size:26px}}
 .s35-lifecycle.st-tutoring .tt-live .tt-nm,.s35-lifecycle.st-tutoring .tt-live .tt-nm2,.s35-lifecycle.st-tutoring .tt-live .tt-veil{color:var(--tt-studiotx)}
+
+.s35-lifecycle.st-tutoring .s35-cancel-error{display:flex;flex-direction:column;gap:10px}

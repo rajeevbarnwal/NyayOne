@@ -31,3 +31,8 @@ describe('S-35 synthetic API and browser evidence contract',()=>{
   expect(classifyS35Errors('list-error','http://local',[],[],[],[]).errors).toContain('S35_EXPECTED_HTTP_ERROR_UNOBSERVED');
  });
 });
+
+it.each([['reschedule-unavailable','SLOT_UNAVAILABLE','reschedule'],['attendance-refused','ATTENDANCE_STATE_INVALID','attendance/confirm'],['cancel-invalid','SESSION_STATE_INVALID','cancel']])('%s captures the exact frozen refusal with a real backend 409', (state,code,endpoint)=>{
+ const p=s35Plan(state),post=p.steps.find(s=>s.method==='POST');expect(post).toMatchObject({path:`/api/v1/tutoring/sessions/${S35_IDS.session}/${endpoint}`,status:409,response:{detail:{code}},body:{expected_version:1}});
+ if(state==='reschedule-unavailable'){expect(post.body.new_slot_id).toBe(S35_IDS.nextSlot);expect(p.steps.find(s=>s.path.endsWith('/availability')).response.slots).toHaveLength(1);}
+});

@@ -37,11 +37,11 @@ export function s35Plan(state){
  }else{
   steps.push(state==='detail-error'?refusal(detail,'NOT_FOUND',404,null,'GET'):step(detail,session));
   if(state.startsWith('reschedule')){
-   view='reschedule';steps.push(step(`/api/v1/tutors/${S35_IDS.tutor}/availability`,{tutor_id:S35_IDS.tutor,iana_timezone:'Asia/Kolkata',window:{from_utc:null,to_utc:null},local_resolution:{},slots:state==='reschedule-unavailable'?[]:[{id:S35_IDS.nextSlot,slot_id:S35_IDS.nextSlot,tutor_id:S35_IDS.tutor,start_utc:'2026-10-01T13:00:00Z',end_utc:'2026-10-01T13:45:00Z',start_local:'2026-10-01T18:30:00+05:30',end_local:'2026-10-01T19:15:00+05:30',iana_timezone:'Asia/Kolkata',duration_minutes:45,status:'available',price_paise:150000,currency:'INR'}],limit:50,offset:0},{search:'?timezone=Asia%2FKolkata&limit=50&offset=0'}));
-   const error={'reschedule-closed':['RESCHEDULE_WINDOW_CLOSED',409],'reschedule-conflict':['SESSION_STALE_VERSION',409],'reschedule-wrong-tutor':['VALIDATION_ERROR',422]}[state];
+   view='reschedule';steps.push(step(`/api/v1/tutors/${S35_IDS.tutor}/availability`,{tutor_id:S35_IDS.tutor,iana_timezone:'Asia/Kolkata',window:{from_utc:null,to_utc:null},local_resolution:{},slots:[{id:S35_IDS.nextSlot,slot_id:S35_IDS.nextSlot,tutor_id:S35_IDS.tutor,start_utc:'2026-10-01T13:00:00Z',end_utc:'2026-10-01T13:45:00Z',start_local:'2026-10-01T18:30:00+05:30',end_local:'2026-10-01T19:15:00+05:30',iana_timezone:'Asia/Kolkata',duration_minutes:45,status:'available',price_paise:150000,currency:'INR'}],limit:50,offset:0},{search:'?timezone=Asia%2FKolkata&limit=50&offset=0'}));
+   const error={'reschedule-unavailable':['SLOT_UNAVAILABLE',409],'reschedule-closed':['RESCHEDULE_WINDOW_CLOSED',409],'reschedule-conflict':['SESSION_STALE_VERSION',409],'reschedule-wrong-tutor':['VALIDATION_ERROR',422]}[state];
    if(error)steps.push(refusal(`${detail}/reschedule`,...error,{new_slot_id:S35_IDS.nextSlot,expected_version:1}));
   }else if(state.startsWith('attendance')||['dispute','disputed'].includes(state)){
-   view='attendance';if(state==='attendance-refused')steps.push(refusal(`${detail}/attendance/confirm`,'ATTENDANCE_STALE_VERSION',409,{expected_version:1}));
+   view='attendance';if(state==='attendance-refused')steps.push(refusal(`${detail}/attendance/confirm`,'ATTENDANCE_STATE_INVALID',409,{expected_version:1}));
   }else if(state.startsWith('review')){
    view='review';
    if(!['review','review-invalid'].includes(state)){
@@ -53,7 +53,7 @@ export function s35Plan(state){
   }else if(state!=='detail-error'){
    steps.push(step(caps,capability(state)));
    if(cancelStates.includes(state)&&state!=='cancel-confirm'){
-    const body={expected_version:1},error={'cancel-failed':['PROVIDER_UNAVAILABLE',503],'cancel-stale':['SESSION_STALE_VERSION',409],'cancel-started':['SESSION_STATE_INVALID',409],'cancel-invalid':['VALIDATION_ERROR',422]}[state];
+    const body={expected_version:1},error={'cancel-failed':['PROVIDER_UNAVAILABLE',503],'cancel-stale':['SESSION_STALE_VERSION',409],'cancel-started':['SESSION_STATE_INVALID',409],'cancel-invalid':['SESSION_STATE_INVALID',409]}[state];
     if(error)steps.push(refusal(`${detail}/cancel`,...error,body));
     else {const no=state==='cancelled-no-auto-refund',cancelled={...session,status:'cancelled',version:2};steps.push(step(`${detail}/cancel`,{...cancelled,refund:{decision:no?'no_auto_refund':'full_refund',amount_paise:no?0:150000,reason:'server_assessment',hours_before_start:'51.00',policy_window_hours:24},refund_id:S35_IDS.refund,reminders_revoked:1},{method:'POST',body}),step(detail,cancelled));}
    }
@@ -146,8 +146,7 @@ export async function mockS35Application(page,state,origin,errors){
    }
   }
  }else if(plan.view==='reschedule'){
-  if(state==='reschedule-unavailable')await text('No other open times');
-  else {await visible(page,page.getByRole('radio').first());await page.getByRole('radio').first().click();await page.clock.runFor(32);if(state!=='reschedule'){await click('Confirm the new time');await refused();}}
+  {await visible(page,page.getByRole('radio').first());await page.getByRole('radio').first().click();await page.clock.runFor(32);if(state!=='reschedule'){await click('Confirm the new time');await refused();}}
  }else if(plan.view==='attendance'){
   await visible(page,page.getByRole('heading',{name:'Session details.',exact:true}));
   if(state==='dispute'){await click('Dispute this');await visible(page,page.getByRole('dialog'));}
@@ -212,7 +211,7 @@ export function verifyS35Terminal(state,s){
  if(s.path!=='/s-35'||s.view!==(state==='left'?'attendance':p.view))return false;
  const e=p.steps.find(x=>x.status>=400);if(e&&!has(e.response.detail.code))return false;
  if(e)return true;
- const required={loading:'Loading your sessions',list:'confirmed',past:'completed','list-empty':'Nothing here yet',detail:'Session details.',reschedule:'Choose a new time','reschedule-unavailable':'No other open times',
+ const required={loading:'Loading your sessions',list:'confirmed',past:'completed','list-empty':'Nothing here yet',detail:'Session details.',reschedule:'Choose a new time',
  'cancel-confirm':'Cancel this session?','cancelled-full-refund':'Refund assessed; settlement not confirmed','cancelled-no-auto-refund':'Cancelled: server refund assessment','refund-pending':'settlement not confirmed','refund-failed':'settlement not confirmed',
  attendance:'An administrator recorded this session as attended',dispute:'Dispute this attendance record?',disputed:'Your dispute is open','attendance-pending':'Attendance is not decided yet','attendance-confirmed':'You confirmed attendance','attendance-resolved':'The dispute was resolved',
  review:'Write a review','review-invalid':'5 / 1,000 characters','review-moderation':'Not published · pending','review-edit':'Save changes','review-window-closed':'Edit deadline:','review-delete-confirm':'Delete this review?','review-deleted':'Review deleted',

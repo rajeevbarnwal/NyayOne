@@ -361,6 +361,12 @@ function ManageView({
   const [announceRegion, announce] = useAnnouncer();
   const queryClient = useQueryClient();
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const cancelErrorRegion = useRef<HTMLElement | null>(null);
+  const cancelFocusPending = useRef(false);
+  const dismissCancel = useCallback(() => {
+    cancelFocusPending.current = false;
+    setConfirmCancel(false);
+  }, []);
   const [cancelled, setCancelled] = useState<CancelResult | null>(null);
   const policy = policyPreview({ startUtcIso: session.startUtc, capturedPaise: 0 });
   const videoCapability = useVideoCapabilities();
@@ -374,7 +380,9 @@ function ManageView({
       expectedVersion: session.version,
     }),
     retry: tutoringRetry,
+    onError: () => setConfirmCancel(false),
     onSuccess: (result) => {
+      cancelFocusPending.current = false;
       setConfirmCancel(false);
       setCancelled(result);
       queryClient.setQueryData(tutoringKeys.session(session.id), result);
@@ -386,6 +394,16 @@ function ManageView({
       onDone();
     },
   });
+
+  // The modal cleanup first removes inert and restores its opener. Only this
+  // submitted cancellation may then hand focus to its newly exposed recovery.
+  // Dismissing the pending dialog clears ownership, so late errors cannot steal it.
+  useEffect(() => {
+    if (cancelMutation.isError && !confirmCancel && cancelFocusPending.current) {
+      cancelFocusPending.current = false;
+      cancelErrorRegion.current?.focus();
+    }
+  }, [cancelMutation.isError, confirmCancel]);
 
   const dock = (
     <Dock>
@@ -478,11 +496,13 @@ function ManageView({
       )}
 
       {cancelMutation.isError && (
-        <TypedErrorState
-          error={cancelMutation.error}
-          recoveryLabel="Reload this session"
-          onRecover={onDone}
-        />
+        <section className="s35-cancel-error" aria-label="Cancellation failed" ref={cancelErrorRegion} tabIndex={-1}>
+          <TypedErrorState
+            error={cancelMutation.error}
+            recoveryLabel="Reload this session"
+            onRecover={onDone}
+          />
+        </section>
       )}
 
       {!cancelled && !policy.started && (
@@ -502,7 +522,7 @@ function ManageView({
       </p>
 
       {confirmCancel && (
-        <Modal title="Cancel this session?" onDismiss={() => setConfirmCancel(false)}>
+        <Modal title="Cancel this session?" onDismiss={dismissCancel}>
           <p className="tt-p" style={{ fontSize: '13px' }}>
             The server will assess eligibility and any refund under the configured window.
             No refund amount or settlement is confirmed here. Cancellation cannot be undone.
@@ -511,12 +531,12 @@ function ManageView({
             type="button"
             className="tt-btn tt-btn--terra tt-btn--block"
             disabled={cancelMutation.isPending}
-            onClick={() => cancelMutation.mutate()}
+            onClick={() => { cancelFocusPending.current = true; cancelMutation.mutate(); }}
           >
             <Ic name="refund" />
             {cancelMutation.isPending ? 'Cancelling' : 'Yes, cancel and assess the refund'}
           </button>
-          <button type="button" className="tt-btn tt-btn--block" onClick={() => setConfirmCancel(false)}>
+          <button type="button" className="tt-btn tt-btn--block" onClick={dismissCancel}>
             <Ic name="close" />
             Keep my session
           </button>
