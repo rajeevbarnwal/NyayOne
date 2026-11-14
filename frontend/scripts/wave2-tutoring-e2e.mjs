@@ -1198,7 +1198,7 @@ async function settled(page, timeout = 20000) {
       // The screens announce their own in-flight state as a "Loading …" banner.
       // Treating that banner as READY is exactly how a runner ends up asserting
       // against a skeleton and calling the absence of a control a defect.
-      if ([...document.querySelectorAll('.tt-banner__t')].some((e) => /^Loading\b/i.test(e.textContent || ''))) return false;
+      if ([...document.querySelectorAll('.s34-notice h2')].some((e) => /^Loading\b/i.test(e.textContent || ''))) return false;
       const anims = typeof document.getAnimations === 'function' ? document.getAnimations() : [];
       const running = anims.filter((a) => {
         if (a.playState !== 'running') return false;
@@ -1776,10 +1776,10 @@ async function stageC(page) {
   arts.push('c1_s33_hold.png', 'c1_s33_order.png', 'c1_s33_confirmed.png');
 
   // The new View session goes straight to S-34. Continue through its existing
-  // All my sessions link so the original list/manage/receipt assertions still run.
+  // My sessions link so the original list/manage/session assertions still run.
   await page.locator('.s33-booking a:has-text("View session")').click();
   await page.waitForFunction(() => location.pathname === '/s-34', { timeout: 15000 });
-  await page.getByRole('link', { name: 'All my sessions', exact: true }).click();
+  await page.locator('main > a').filter({ hasText: 'My sessions' }).click();
   await page.waitForSelector('article.tt-tut', { timeout: 20000 });
   await settled(page);
   arts.push(await shot(page, 'c2_s35_list_after_booking'));
@@ -1795,9 +1795,9 @@ async function stageC(page) {
   arts.push(await shot(page, 'c4_s34_confirmation'));
   const s34 = await page.evaluate(() => ({
     heading: document.querySelector('h1')?.textContent?.trim(),
-    seal: !!document.querySelector('span.tt-seal'),
-    kv: [...document.querySelectorAll('.tt-kv')].map((k) => k.textContent.trim()),
-    banners: [...document.querySelectorAll('.tt-banner__t')].map((b) => b.textContent.trim()),
+    seal: !!document.querySelector('.s34-notice.s34-confirmed'),
+    kv: [...document.querySelectorAll('.s34-facts > div')].map((k) => k.textContent.trim()),
+    banners: [...document.querySelectorAll('.s34-notice h2')].map((b) => b.textContent.trim()),
   }));
 
   const row = await sessionRow(booked.sessionId);
@@ -1829,7 +1829,7 @@ async function stageC(page) {
   chk.ok('the session row exists and is confirmed', 'a tutoring_sessions row in confirmed/scheduled', row?.status, (v) => ['confirmed', 'scheduled'].includes(v));
   chk.eq('the session belongs to the browsing student', hex(STUDENT), row ? hex(row.student_user_id) : undefined);
   chk.ok('the session carries the paid order', 'a non-null order_id', row?.order_id, (v) => !!v);
-  chk.ok('S-34 renders the booked-confirmation heading', 'a heading matching /booked/i', s34.heading, (v) => /booked/i.test(v));
+  chk.ok('S-34 renders the booked-confirmation heading', 'Session heading and server-confirmed notice', s34, (v) => /^Session(?: with .+)?\.$/.test(v.heading) && v.seal && v.banners.includes('Confirmed.'));
   chk.eq('the price charged is the SERVER-authoritative price', FEE_PAISE, orderRow ? Number(orderRow.amount_paise) : undefined);
   chk.ok(
     'any amount the checkout sends is an ECHO of the server-published price, never a client-side or environment value',
@@ -3487,7 +3487,7 @@ async function stageNeg2b(page, browser) {
       const diagnosis = await p
         .waitForFunction(
           (want) => {
-            const titles = [...document.querySelectorAll('.tt-banner__t')].map((e) => e.textContent.trim());
+            const titles = [...document.querySelectorAll('.s34-notice h2')].map((e) => e.textContent.trim());
             return titles.find((t) => new RegExp(want, 'i').test(t)) || false;
           },
           expectProblem,
@@ -3615,7 +3615,7 @@ async function stageNeg2b(page, browser) {
       });
       offlineState = await p.evaluate(() => ({
         online: navigator.onLine,
-        banners: [...document.querySelectorAll('.tt-banner__t')].map((e) => e.textContent.trim()).slice(0, 4),
+        banners: [...document.querySelectorAll('.s34-notice h2')].map((e) => e.textContent.trim()).slice(0, 4),
         sessionHeadingRendered: !!document.querySelector('h1'),
         body: (document.body.textContent || '').slice(0, 200),
       }));
@@ -3647,7 +3647,7 @@ async function stageNeg2b(page, browser) {
       const roundTrip = await api('GET', `/api/v1/tutoring/sessions/${live.sessionId}`, { sub: STUDENT });
       recoveredState = await p.evaluate(() => ({
         online: navigator.onLine,
-        banners: [...document.querySelectorAll('.tt-banner__t')].map((e) => e.textContent.trim()).slice(0, 4),
+        banners: [...document.querySelectorAll('.s34-notice h2')].map((e) => e.textContent.trim()).slice(0, 4),
         sessionHeadingRendered: !!document.querySelector('h1'),
       }));
       recoveredState.serverRoundTripStatus = roundTrip.status;

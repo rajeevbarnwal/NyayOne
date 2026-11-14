@@ -85,7 +85,7 @@ const REVISION_L_VISUAL_SCREEN_IDS = Object.freeze([
   'S-28',
   'S-29',
   'S-30',
-  'S-31', 'S-32', 'S-33',
+  'S-31', 'S-32', 'S-33', 'S-34',
 ]);
 const REVISION_L_HEADING_STACK = Object.freeze([
   'aptos',
@@ -397,7 +397,10 @@ async function recordVisualContract(page, screenId) {
         const s33Eyebrow = contract.screenId === 'S-33' && heading.tagName === 'H2'
           && heading.getAttribute('class') === 's20-eyebrow'
           && ['s33-summary', 's33-policy', 's33-payment'].includes(heading.getAttribute('id'));
-        const expectedFamily = s33Eyebrow || s19Eyebrow || s20Eyebrow || s21Eyebrow || s32Eyebrow ? ['space grotesk', 'sans-serif'] : expected;
+        const s34Eyebrow = contract.screenId === 'S-34' && heading.tagName === 'H2'
+          && heading.getAttribute('class') === 's20-eyebrow'
+          && heading.getAttribute('id') === 's34-joining';
+        const expectedFamily = s34Eyebrow || s33Eyebrow || s19Eyebrow || s20Eyebrow || s21Eyebrow || s32Eyebrow ? ['space grotesk', 'sans-serif'] : expected;
         return family.length === expectedFamily.length
           && family.every((name, index) => name === expectedFamily[index]);
       }),
