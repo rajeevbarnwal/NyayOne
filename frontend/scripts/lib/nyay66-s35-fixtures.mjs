@@ -38,7 +38,7 @@ export function s35Plan(state){
   steps.push(state==='detail-error'?refusal(detail,'NOT_FOUND',404,null,'GET'):step(detail,session));
   if(state.startsWith('reschedule')){
    view='reschedule';steps.push(step(`/api/v1/tutors/${S35_IDS.tutor}/availability`,{tutor_id:S35_IDS.tutor,iana_timezone:'Asia/Kolkata',window:{from_utc:null,to_utc:null},local_resolution:{},slots:state==='reschedule-unavailable'?[]:[{id:S35_IDS.nextSlot,slot_id:S35_IDS.nextSlot,tutor_id:S35_IDS.tutor,start_utc:'2026-10-01T13:00:00Z',end_utc:'2026-10-01T13:45:00Z',start_local:'2026-10-01T18:30:00+05:30',end_local:'2026-10-01T19:15:00+05:30',iana_timezone:'Asia/Kolkata',duration_minutes:45,status:'available',price_paise:150000,currency:'INR'}],limit:50,offset:0},{search:'?timezone=Asia%2FKolkata&limit=50&offset=0'}));
-   const error={'reschedule-closed':['RESCHEDULE_WINDOW_CLOSED',409],'reschedule-conflict':['SLOT_UNAVAILABLE',409],'reschedule-wrong-tutor':['VALIDATION_ERROR',422]}[state];
+   const error={'reschedule-closed':['RESCHEDULE_WINDOW_CLOSED',409],'reschedule-conflict':['SESSION_STALE_VERSION',409],'reschedule-wrong-tutor':['VALIDATION_ERROR',422]}[state];
    if(error)steps.push(refusal(`${detail}/reschedule`,...error,{new_slot_id:S35_IDS.nextSlot,expected_version:1}));
   }else if(state.startsWith('attendance')||['dispute','disputed'].includes(state)){
    view='attendance';if(state==='attendance-refused')steps.push(refusal(`${detail}/attendance/confirm`,'ATTENDANCE_STALE_VERSION',409,{expected_version:1}));

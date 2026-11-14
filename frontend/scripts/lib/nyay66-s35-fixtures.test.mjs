@@ -22,6 +22,9 @@ describe('S-35 synthetic API and browser evidence contract',()=>{
   expect(s35Plan('reschedule-wrong-tutor').steps.find(s=>s.method==='POST')).toMatchObject({status:422,response:{detail:{code:'VALIDATION_ERROR'}},body:{expected_version:1,new_slot_id:S35_IDS.nextSlot}});
   for(const state of ['review-edit','review-delete-confirm','review-deleted','review-delete-failed'])expect(s35Plan(state).steps.some(s=>s.method==='POST'&&s.path.endsWith('/review'))).toBe(true);
  });
+ it('reschedule conflict proves the genuine stale-session response, not an unavailable slot',()=>{
+  expect(s35Plan('reschedule-conflict').steps.find(s=>s.method==='POST')).toMatchObject({status:409,response:{detail:{code:'SESSION_STALE_VERSION'}},body:{expected_version:1,new_slot_id:S35_IDS.nextSlot}});
+ });
  it('does not excuse unexpected browser/network errors or missing expected HTTP errors',()=>{
   expect(classifyS35Errors('list','http://local',[],[],[],[]).errors).toEqual([]);
   expect(classifyS35Errors('list','http://local',[{text:'unexpected',url:'http://local'}],[],[],[]).errors).toContain('CONSOLE_ERROR');

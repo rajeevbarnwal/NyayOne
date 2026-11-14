@@ -200,7 +200,7 @@ function SessionList({ go }: { go: Go }) {
     <TutoringScreen screenId="S-35">
       <div>
         <div className="tt-eyebrow">Your chambers diary</div>
-        <h1 className="tt-h tt-arrival">My sessions.</h1>
+        <h1 className="tt-h tt-arrival"><span className="s35-heading-icon"><Ic name="cal" /></span>My sessions.</h1>
         <p className="tt-p" style={{ marginTop: '5px' }}>
           Join, reschedule, cancel, confirm attendance and review — all from the server&apos;s own
           record of each session.
@@ -336,8 +336,8 @@ function SessionHeading({ session }: { session: TutoringSession }) {
   return (
     <div>
       <Chip tone={LIVE_STATUSES.includes(session.status) ? 'g' : 'i'}>{session.status}</Chip>
-      <h1 className="tt-h tt-arrival" style={{ marginTop: '8px', fontSize: '19px' }}>
-        Session details.
+      <h1 className="tt-h tt-arrival">
+        <span className="s35-heading-icon"><Ic name="cal" /></span>Session details.
       </h1>
       <p className="tt-p" style={{ fontSize: '12.5px' }}>
         {labels.sessionZone} · {labels.sessionZoneLabel}
@@ -1786,7 +1786,7 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
     <TutoringScreen screenId="S-35" bare>
       {announceRegion}
       <div className="tt-live-host">
-        <main className="tt-live" data-family="room" data-tt-transport={roomState}>
+        <section aria-label="Live mentoring session" className="tt-live" data-family="room" data-tt-transport={roomState}>
           <div className="tt-lh">
             {/*
               ADMISSION and TRANSPORT are two different facts and are reported
@@ -1800,7 +1800,7 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
             <Chip tone={issueError ? 'r' : flowing ? 'g' : credential ? 'i' : 'i'}>
               {issueError ? 'Not admitted' : flowing ? 'In the room' : credential ? 'Entry authorised' : 'Joining'}
             </Chip>
-            <span className="t">Mentoring session</span>
+            <h1 className="t">Mentoring session</h1>
             <span className="tt-grow" />
             <span className="m">{clock}</span>
             <button
@@ -2137,7 +2137,7 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
               </button>
             </Modal>
           )}
-        </main>
+        </section>
       </div>
     </TutoringScreen>
   );
