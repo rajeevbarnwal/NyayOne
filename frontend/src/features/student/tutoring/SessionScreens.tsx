@@ -115,13 +115,13 @@ import {
   useRouteArrival,
 } from './TutoringPrimitives';
 
-type View = 'list' | 'manage' | 'policy' | 'reschedule' | 'attendance' | 'review' | 'prejoin' | 'room';
+type View = 'list' | 'detail' | 'manage' | 'policy' | 'reschedule' | 'attendance' | 'review' | 'prejoin' | 'room';
 
-const VIEWS: View[] = ['list', 'manage', 'policy', 'reschedule', 'attendance', 'review', 'prejoin', 'room'];
+const VIEWS: View[] = ['list', 'detail', 'manage', 'policy', 'reschedule', 'attendance', 'review', 'prejoin', 'room'];
 
 function readView(raw: string | null, sessionId: string): View {
   if (raw && (VIEWS as string[]).includes(raw)) return raw as View;
-  return sessionId ? 'manage' : 'list';
+  return sessionId ? 'detail' : 'list';
 }
 
 /* ========================================================================== *
@@ -342,10 +342,10 @@ function SessionHeading({ session }: { session: TutoringSession }) {
     <div>
       <Chip tone={LIVE_STATUSES.includes(session.status) ? 'g' : 'i'}>{session.status}</Chip>
       <h1 className="tt-h tt-arrival" style={{ marginTop: '8px', fontSize: '19px' }}>
-        {labels.sessionZone}
+        Session details.
       </h1>
       <p className="tt-p" style={{ fontSize: '12.5px' }}>
-        {labels.sessionZoneLabel}
+        {labels.sessionZone} · {labels.sessionZoneLabel}
         {labels.readerZone && <> · your time {labels.readerZone} ({labels.readerZoneLabel})</>}
       </p>
     </div>
@@ -385,8 +385,8 @@ function ManageView({
       queryClient.setQueryData(tutoringKeys.session(session.id), result);
       announce(
         result.refund && result.refund.amountPaise > 0
-          ? `Session cancelled. ${formatPaise(result.refund.amountPaise)} is being refunded.`
-          : 'Session cancelled. No automatic refund applies at this notice.',
+          ? `Session cancelled. Refund assessed: ${formatPaise(result.refund.amountPaise)}. Settlement is not confirmed.`
+          : 'Session cancelled. Check the returned refund assessment.',
       );
       onDone();
     },
@@ -419,7 +419,7 @@ function ManageView({
         </button>
         <Link className="tt-btn" to={`/s-34?session=${encodeURIComponent(session.id)}`}>
           <Ic name="info" />
-          Receipt
+          Session confirmation
         </Link>
       </div>
     </Dock>
@@ -450,17 +450,9 @@ function ManageView({
         />
       ) : (
         <Banner
-          tone={policy.rescheduleFree ? 'info' : 'warn'}
-          title={
-            policy.rescheduleFree
-              ? `Free cancellation and reschedule for another ${Math.floor(policy.hoursBeforeStart - policy.policyWindowHours)} hours`
-              : 'Inside the notice window'
-          }
-          detail={
-            policy.rescheduleFree
-              ? `You are ${policy.hoursBeforeStart} hours before the start, which is outside the ${policy.policyWindowHours} hour window, so cancelling earns a full refund and rescheduling is free.`
-              : `You are ${policy.hoursBeforeStart} hours before the start, inside the ${policy.policyWindowHours} hour window. Cancelling now earns no automatic refund and a free reschedule is refused. An administrator can still review your case.`
-          }
+          tone="info"
+          title="Cancellation and rescheduling"
+          detail="The server applies the configured window when you submit a request. This session record does not include the current window or paid amount; no refund is promised before the server assessment."
         />
       )}
 
@@ -517,9 +509,8 @@ function ManageView({
       {confirmCancel && (
         <Modal title="Cancel this session?" onDismiss={() => setConfirmCancel(false)}>
           <p className="tt-p" style={{ fontSize: '13px' }}>
-            {policy.rescheduleFree
-              ? 'You are outside the notice window, so the server will assess a full refund of the captured amount. This cannot be undone.'
-              : 'You are inside the notice window, so no automatic refund applies. You may prefer to reschedule instead. This cannot be undone.'}
+            The server will assess eligibility and any refund under the configured window.
+            No refund amount or settlement is confirmed here. Cancellation cannot be undone.
           </p>
           <button
             type="button"
@@ -548,40 +539,34 @@ function RefundOutcome({ result }: { result: CancelResult }) {
       <Banner
         tone="warn"
         title="Session cancelled, no refund recorded"
-        detail="The server cancelled the session and recorded no refund for it. Nothing further is needed from you."
+        detail="The server cancelled the session but returned no refund assessment. Refund eligibility and settlement are not confirmed."
       />
     );
   }
   const due = refund.amountPaise > 0;
-  const step = due ? 3 : 1;
   return (
     <>
       <Banner
         tone={due ? 'ok' : 'warn'}
-        title={due ? 'Cancelled with a refund' : 'Cancelled with no automatic refund'}
+        title={due ? 'Refund assessed; settlement not confirmed' : 'Cancelled: server refund assessment'}
         detail={
           due
             ? `The server assessed ${formatPaise(refund.amountPaise)} under the ${refund.policyWindowHours} hour policy, ${refund.hoursBeforeStart} hours before the start.`
-            : `At ${refund.hoursBeforeStart} hours before the start you were inside the ${refund.policyWindowHours} hour window, so no automatic refund applies. An administrator can still review this.`
+            : `The server assessed ${formatPaise(refund.amountPaise)} under its ${refund.policyWindowHours} hour policy. Decision: ${refund.decision}.`
         }
         code={refund.decision.toUpperCase()}
       />
       {due && (
         <div className="tt-amt">
-          <div className="tt-amt__eyebrow">Returning to you</div>
+          <div className="tt-amt__eyebrow">Assessed amount</div>
           <div className="tt-amt__big tt-mono">{formatPaise(refund.amountPaise)}</div>
           <div style={{ fontSize: '12.5px', color: 'var(--tt-ink2)', lineHeight: 1.5 }}>
-            Back to the instrument you paid with. Repeat requests return the same refund reference,
-            so you cannot be refunded twice.
+            The cancellation response does not provide settlement status. There is no student refund-status endpoint to poll.
           </div>
           <div className="tt-chiprow">
-            <Chip tone="g">No deduction</Chip>
             {result.refundId && <Chip tone="t">Reference recorded</Chip>}
           </div>
-          <div className="tt-prog" aria-label={`Refund progress: step ${step} of 5`}>
-            <span>Step {step} of 5</span>
-            {[1, 2, 3, 4, 5].map((i) => <i key={i} className={i <= step ? 'on' : ''} />)}
-          </div>
+
         </div>
       )}
       {result.refundId && (
@@ -617,7 +602,7 @@ function PolicyView({ session, go }: { session: TutoringSession; go: Go }) {
             onClick={() => go('reschedule')}
           >
             <Ic name="cal" />
-            {policy.rescheduleFree ? 'Reschedule free' : 'Try to reschedule'}
+            Try to reschedule
           </button>
           <button type="button" className="tt-btn tt-btn--block" onClick={() => go('manage')}>
             <Ic name="back" />
@@ -629,21 +614,9 @@ function PolicyView({ session, go }: { session: TutoringSession; go: Go }) {
       <SessionHeading session={session} />
       <h2 className="tt-h">What happens if you cancel now</h2>
       <Banner
-        tone={policy.rescheduleFree ? 'info' : 'warn'}
-        title={
-          policy.started
-            ? 'The start has passed, so cancellation is closed'
-            : policy.rescheduleFree
-              ? 'Outside the notice window'
-              : 'Inside the notice window'
-        }
-        detail={
-          policy.started
-            ? 'You can still go to attendance once the session ends.'
-            : policy.rescheduleFree
-              ? `At ${policy.hoursBeforeStart} hours before the start you are outside the ${policy.policyWindowHours} hour window, so the server assesses a full refund and a reschedule is free.`
-              : `At ${policy.hoursBeforeStart} hours before the start you are inside the ${policy.policyWindowHours} hour window. No automatic refund and no free reschedule. Only an audited administrator exception moves money inside the window.`
-        }
+        tone="info"
+        title={policy.started ? 'The scheduled start has passed' : 'Server-assessed cancellation'}
+        detail="The server applies the configured window and assesses any refund when you submit. The session GET response does not disclose the current window or paid amount."
       />
       {policy.started && (
         <p className="tt-p tt-muted" id="tt-resch-why">
@@ -652,17 +625,13 @@ function PolicyView({ session, go }: { session: TutoringSession; go: Go }) {
       )}
       <div className="tt-dis">
         <div className="tt-dis__body" style={{ paddingTop: '12px' }}>
-          <Kv label="Free cancellation window">
-            {policy.policyWindowHours} hours or more before the start
-          </Kv>
-          <Kv label="Boundary">Exactly {policy.policyWindowHours} hours is still free</Kv>
-          <Kv label="Inside the window">Audited administrator exception only</Kv>
-          <Kv label="Reschedule">Free outside the window, payment preserved</Kv>
+          <Kv label="Cancellation window">Configured window; not returned by this session record</Kv>
+          <Kv label="Refund">Assessment returned after server confirmation; settlement is separate</Kv>
+          <Kv label="Reschedule">The server checks the selected slot and current session version</Kv>
         </div>
       </div>
       <p className="tt-svr">
-        server-authoritative: the frozen policy computes every refund · this preview mirrors the
-        same rule and never decides it
+        Eligibility and refunds are determined by the server, not a local policy estimate.
       </p>
     </TutoringScreen>
   );
