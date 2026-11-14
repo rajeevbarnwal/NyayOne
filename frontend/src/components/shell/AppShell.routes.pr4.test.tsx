@@ -13,7 +13,7 @@ function renderShell(url: string, child = <p>Screen-owned content</p>) {
   );
 }
 
-const paths = Array.from({ length: 34 }, (_, i) => `/s-${String(i + 1).padStart(2, '0')}`);
+const paths = Array.from({ length: 35 }, (_, i) => `/s-${String(i + 1).padStart(2, '0')}`);
 const variants = [
   (p: string) => p,
   (p: string) => p.toUpperCase(),
@@ -36,7 +36,7 @@ describe('PR4 route-aware shell selection', () => {
     });
   }
 
-  it.each(['/s-03', '/s-04', '/s-05', '/s-08', '/s-09', '/s-26', '/s-27', '/s-28', '/s-29', '/s-30', '/s-31', '/s-32', '/s-33', '/s-34'])('%s does not add a nested main around screen-owned main', path => {
+  it.each(['/s-03', '/s-04', '/s-05', '/s-08', '/s-09', '/s-26', '/s-27', '/s-28', '/s-29', '/s-30', '/s-31', '/s-32', '/s-33', '/s-34', '/s-35'])('%s does not add a nested main around screen-owned main', path => {
     const html = renderShell(path.toUpperCase() + '/', <main>Screen-owned main</main>);
     expect(html.match(/<main\b/g)).toHaveLength(1);
     expect(html).toContain('<div class="ls-v34-content"><main>');
@@ -64,7 +64,7 @@ describe('PR4 route-aware shell selection', () => {
     expect(html).toContain('APPLICATION');
   });
 
-  it.each(['/s-120', '/s-12/child', '/s-12-extra', '/s-00', '/s-35', '/s-32-extra', '/s-32/child', '/s-90', '/__tokens', '/unknown'])(
+  it.each(['/s-120', '/s-12/child', '/s-12-extra', '/s-00', '/s-36', '/s-35-extra', '/s-35/child', '/s-32-extra', '/s-32/child', '/s-90', '/__tokens', '/unknown'])(
     '%s does not acquire another screen’s shell via a prefix match', url => {
       expect(renderShell(url)).toContain('class="ls-shell"');
     },
