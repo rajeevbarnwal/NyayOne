@@ -314,6 +314,7 @@ function SessionDetailViews({
   if (query.isError) {
     return (
       <TutoringScreen screenId="S-35">
+        <h1 className="tt-h tt-arrival"><span className="s35-heading-icon"><Ic name="cal" /></span>Session details.</h1>
         <div className="s35-state-card s35-state-card--error s35-state-card--detail-error"><TypedErrorState
           error={query.error}
           recoveryLabel="Back to my sessions"
@@ -1216,6 +1217,7 @@ function PreJoinView({ session, go }: { session: TutoringSession; go: Go }) {
   if (videoCapability.isError || !videoCapability.data.videoCallsEnabled) {
     return (
       <TutoringScreen screenId="S-35">
+        <h1 className="tt-h tt-arrival"><span className="s35-heading-icon"><Ic name="cal" /></span>Room entry check</h1>
         <button type="button" className="tt-btn" onClick={() => go('manage')}>
           <Ic name="back" /> Back to the session
         </button>
