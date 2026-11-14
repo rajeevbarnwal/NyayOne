@@ -12,7 +12,7 @@ export const S18_VIEWPORTS=Object.freeze([
 export const S18_PINS=Object.freeze({chromium:'149.0.7827.55',playwright:'1.61.1',platform:'linux-x64'});
 // Included in the protected bundle: a new dispatch-workflow revision cannot
 // silently claim this capture approval by changing an unprotected policy seal.
-const S18_CALIBRATION_WORKFLOW_SHA256='fe6f0a22b573c2c32d0b1207a5d99be8fd0a25880a990125db2241574e23dae1';
+const S18_CALIBRATION_WORKFLOW_SHA256='bd3a267530188bcb335a09c7480b372f15efc821d502b7afed99af1a7e1b9437';
 export function verifyS18ControlWorkflow(bytes){
   if(digest(bytes)!==S18_CALIBRATION_WORKFLOW_SHA256)throw Error('S18_CONTROL_WORKFLOW_MISMATCH');
   return true;
