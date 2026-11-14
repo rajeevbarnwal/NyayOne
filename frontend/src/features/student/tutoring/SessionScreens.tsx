@@ -314,7 +314,7 @@ function SessionDetailViews({
   if (query.isError) {
     return (
       <TutoringScreen screenId="S-35">
-        <div className="s35-state-card s35-state-card--error"><TypedErrorState
+        <div className="s35-state-card s35-state-card--error s35-state-card--detail-error"><TypedErrorState
           error={query.error}
           recoveryLabel="Back to my sessions"
           onRecover={() => go('list', '')}

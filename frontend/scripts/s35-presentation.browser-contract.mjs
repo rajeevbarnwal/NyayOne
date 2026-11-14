@@ -57,3 +57,5 @@ for(const state of ['room','room-connecting','room-reconnecting','room-failed','
 }));
 
 it('Empty-list presentation preserves the existing polite status announcement',()=>scene('list-empty',390,async p=>{assert.equal(await p.getByRole('status').filter({hasText:'Nothing here yet'}).count(),1);}));
+
+for(const state of ['list-error','detail-error'])it(`${state} recovery retains compact frozen action geometry and decorative icon`,()=>scene(state,390,async p=>{const card=p.locator('.s35-state-card'),button=card.locator('.tt-btn');assert.ok((await button.boundingBox()).width<(await card.boundingBox()).width-50);assert.equal(await button.evaluate(e=>getComputedStyle(e,'::before').width),'18px');assert.notEqual(await button.evaluate(e=>getComputedStyle(e,'::before').maskImage),'none');}));
