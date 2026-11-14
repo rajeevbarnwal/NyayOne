@@ -1,3 +1,4 @@
+import {loadS35Cache} from './lib/nyay66-s35-import.mjs';
 import http from 'node:http';
 import {readFile,readdir,mkdir,writeFile} from 'node:fs/promises';
 import {resolve,dirname,extname} from 'node:path';
@@ -65,6 +66,7 @@ const s31=await loadS31Cache(root,config.s31,continuation,manifest.fonts);
 const s32=await loadS32Cache(root,config.s32,continuation,manifest.fonts);
 const s33=await loadS33Cache(root,config.s33,continuation,manifest.fonts);
 const s34=await loadS34Cache(root,config.s34,continuation,manifest.fonts);
+const s35=await loadS35Cache(root,config.s35,continuation,manifest.fonts);
 const coverageOptions={r2:!!r2,s18:!!s18,s19:!!s19,s20:!!s20,s21:!!s21,s25:!!s25,s26:!!s26,s27:!!s27,s28:!!s28,s29:!!s29,s30:!!s30,s31:!!s31,s32:!!s32,s33:!!s33,s34:!!s34};
 const out=resolve(process.env.NYAY66_OUTPUT||resolve(root,'frontend/artifacts/nyay66-live'));
 await mkdir(dirname(out),{recursive:true});await mkdir(out);
@@ -98,6 +100,7 @@ await new Promise(done=>server.listen(0,'127.0.0.1',done));
 const origin=`http://127.0.0.1:${server.address().port}`;
 let browser;
 const report={head,generatedUTC:new Date().toISOString(),referenceCache:config.cache,referenceManifestSha256:config.manifestSha256,referenceGenerationExecuted:false,rows:[],enforced:config.enforced,approvedToleranceRecord:'NYAY-66:15382'};
+if(s35)report.s35Reference={cache:config.s35.cache,manifestSha256:config.s35.manifestSha256,provenance:s35.provenance};
 if(r2)report.r2Reference={cache:config.r2.cache,manifestSha256:config.r2.manifestSha256,sourceSha256:R2_SOURCE_SHA256,approval:r2.manifest.approval};
 const crop=(png,box)=>{
   const x=Math.max(0,Math.floor(box.x)),y=Math.max(0,Math.floor(box.y));
