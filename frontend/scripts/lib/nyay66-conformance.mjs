@@ -12,6 +12,7 @@ import {S31_MEASURED_STATES} from './nyay66-s31-coverage.mjs';
 import {S32_MEASURED_STATES} from './nyay66-s32-coverage.mjs';
 import {S33_MEASURED_STATES} from './nyay66-s33-coverage.mjs';
 import {S34_MEASURED_STATES} from './nyay66-s34-coverage.mjs';
+import {S35_MEASURED_STATES} from './nyay66-s35-coverage.mjs';
 export const SOURCE_SHA256 = '338d5fd22b5e9e8c3c7599846428c99b151b3adf21907f69998a54fdefe33252';
 export const VIEWS = ['s03', 's04', 's05', 's08', 's09', 's10a', 's10b', 's11', 's12', 's13', 's14', 's14p', 's15', 's16', 's17'];
 export const VIEWPORTS = [
@@ -19,7 +20,7 @@ export const VIEWPORTS = [
   { id: 'desktop', width: 1440, height: 1024 },
 ];
 
-export function coverage(theme = 'light', {r2 = false, s18 = false, s19 = false, s20 = false, s21 = false, s25 = false, s26 = false, s27 = false, s28 = false, s29 = false, s30 = false, s31 = false, s32 = false, s33 = false, s34 = false} = {}) {
+export function coverage(theme = 'light', {r2 = false, s18 = false, s19 = false, s20 = false, s21 = false, s25 = false, s26 = false, s27 = false, s28 = false, s29 = false, s30 = false, s31 = false, s32 = false, s33 = false, s34 = false, s35 = false} = {}) {
   const items = [...Array.from({ length: 17 }, (_, i) => `S-${String(i + 1).padStart(2, '0')}`), 'S-07-popup'].map(screen => {
     const views = screen === 'S-07-popup' ? ['s14p'] : screen === 'S-07' ? ['s14'] : screen === 'S-10' ? ['s10a', 's10b'] : VIEWS.filter(view => view === screen.toLowerCase().replace('-', ''));
     const states={'S-01':['checking','error','resolved'],'S-02':['default','focus'],'S-06':['entry','invalidnum','submitting','challenge','wrong','expired','locked','neterr','success']};
@@ -40,6 +41,7 @@ export function coverage(theme = 'light', {r2 = false, s18 = false, s19 = false,
   if(s32&&theme==='light')items.push({screen:'S-32',source:'s32',status:'NOT-YET-MEASURED',views:S32_MEASURED_STATES.map(s=>`s32-${s}`)});
   if(s33&&theme==='light')items.push({screen:'S-33',source:'s33',status:'NOT-YET-MEASURED',views:S33_MEASURED_STATES.map(s=>`s33-${s}`)});
   if(s34&&theme==='light')items.push({screen:'S-34',source:'s34',status:'NOT-YET-MEASURED',views:S34_MEASURED_STATES.map(s=>`s34-${s}`)});
+  if(s35&&theme==='light')items.push({screen:'S-35',source:'s35',status:'NOT-YET-MEASURED',views:S35_MEASURED_STATES.map(s=>`s35-${s}`)});
   return items;
 }
 

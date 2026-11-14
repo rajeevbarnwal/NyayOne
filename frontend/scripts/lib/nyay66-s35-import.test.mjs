@@ -81,14 +81,14 @@ describe('S-35 archive import fails closed before writing',()=>{
   });
 });
 
-describe('S-35 reference-only integration',()=>{
-  it('verifies imported cache before capture without claiming S-35 product measurement',()=>{
+describe('S-35 verified import integration',()=>{
+  it('verifies imported cache before the separate S-35 product producer',()=>{
     const live=readFileSync(join(root,'frontend/scripts/nyay66-live.mjs'),'utf8');
     expect(live).toContain("import {loadS35Cache} from './lib/nyay66-s35-import.mjs'");
     expect(live).toContain('await loadS35Cache(root,config.s35,continuation,manifest.fonts)');
     expect(live).toContain('if(s35)report.s35Reference={cache:config.s35.cache,manifestSha256:config.s35.manifestSha256,provenance:s35.provenance}');
-    expect(live).not.toContain('captureS35Rows');
-    expect(live).not.toContain('s35:!!s35');
+    expect(live).toContain('await captureS35Rows({browser,origin,out,reference:s35})');
+    expect(live.match(/s35:!!s35/g)).toHaveLength(2);
   });
 });
 
