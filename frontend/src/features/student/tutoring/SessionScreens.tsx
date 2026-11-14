@@ -230,8 +230,10 @@ function SessionList({ go }: { go: Go }) {
       {query.isSuccess && query.data.items.length === 0 && (
         <section className="s35-state-card">
           <span className="s35-heading-icon"><Ic name="cal" /></span>
-          <h2>Nothing here yet</h2>
-          <p>When you book a mentor, the session appears here with its join, reschedule and cancel actions.</p>
+          <div className="s35-state-copy" role="status">
+            <h2>Nothing here yet</h2>
+            <p>When you book a mentor, the session appears here with its join, reschedule and cancel actions.</p>
+          </div>
           <Link className="tt-btn tt-btn--jade" to="/s-31"><Ic name="search" />Find a mentor</Link>
         </section>
       )}

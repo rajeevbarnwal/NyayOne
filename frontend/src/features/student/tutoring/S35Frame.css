@@ -82,3 +82,4 @@
 .s35-lifecycle.st-tutoring .s35-state-card--error .tt-banner__t{font-family:var(--tt-display);font-size:17px;font-weight:800;line-height:1.15;color:var(--tt-ink)}
 .s35-lifecycle.st-tutoring .s35-state-card--error .tt-banner__d{font-size:13px;line-height:1.5;margin-top:10px;max-width:38ch}
 .s35-lifecycle.st-tutoring .s35-heading-icon--risk{background:var(--tt-riskq);color:var(--tt-risk)}
+.s35-lifecycle.st-tutoring .s35-state-copy{display:flex;flex-direction:column;align-items:center;gap:10px}

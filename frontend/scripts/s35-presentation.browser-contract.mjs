@@ -55,3 +55,5 @@ for(const state of ['room','room-connecting','room-reconnecting','room-failed','
   assert.ok(!c.bg.startsWith('rgba'),JSON.stringify(c));assert.ok(contrast(c.fg,c.bg)>=4.5,JSON.stringify(c));
  }
 }));
+
+it('Empty-list presentation preserves the existing polite status announcement',()=>scene('list-empty',390,async p=>{assert.equal(await p.getByRole('status').filter({hasText:'Nothing here yet'}).count(),1);}));
