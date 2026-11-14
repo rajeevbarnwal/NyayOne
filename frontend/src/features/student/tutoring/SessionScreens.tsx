@@ -1,3 +1,5 @@
+import {S35Review} from './S35Review';
+import {S35Frame as TutoringScreen} from './S35Frame';
 /**
  * S-35 `tutoring/session` (SAATHI-66, matrix D1-D5, E1, F1-F3, I1, I2).
  *
@@ -46,11 +48,9 @@ import {
 } from '../lib/useStudentMutation';
 import {
   ATTENDANCE_DISPUTE_REASON_CODES,
-  REVIEW_BLOCKED,
   TutoringApiError,
   cancelSession,
   confirmAttendance,
-  createReview,
   disputeAttendance,
   getAvailability,
   getTutoringCapabilities,
@@ -70,15 +70,11 @@ import {
   type TutoringCapabilities,
 } from '../lib/tutoringApi';
 import {
-  REVIEW_MAX_BODY,
-  REVIEW_MAX_RATING,
-  REVIEW_MIN_BODY,
   browserTimeZone,
   durationMinutes,
   formatPaise,
   policyPreview,
   slotTimeLabels,
-  validateReview,
 } from '../lib/tutoringRules';
 import {
   clearPreferredDevices,
@@ -109,19 +105,18 @@ import {
   Kv,
   LoadingState,
   Modal,
-  TutoringScreen,
   TypedErrorState,
   useAnnouncer,
   useRouteArrival,
 } from './TutoringPrimitives';
 
-type View = 'list' | 'manage' | 'policy' | 'reschedule' | 'attendance' | 'review' | 'prejoin' | 'room';
+type View = 'list' | 'detail' | 'manage' | 'policy' | 'reschedule' | 'attendance' | 'review' | 'prejoin' | 'room';
 
-const VIEWS: View[] = ['list', 'manage', 'policy', 'reschedule', 'attendance', 'review', 'prejoin', 'room'];
+const VIEWS: View[] = ['list', 'detail', 'manage', 'policy', 'reschedule', 'attendance', 'review', 'prejoin', 'room'];
 
 function readView(raw: string | null, sessionId: string): View {
   if (raw && (VIEWS as string[]).includes(raw)) return raw as View;
-  return sessionId ? 'manage' : 'list';
+  return sessionId ? 'detail' : 'list';
 }
 
 /* ========================================================================== *
@@ -205,7 +200,7 @@ function SessionList({ go }: { go: Go }) {
     <TutoringScreen screenId="S-35">
       <div>
         <div className="tt-eyebrow">Your chambers diary</div>
-        <h1 className="tt-h tt-arrival">Sessions</h1>
+        <h1 className="tt-h tt-arrival"><span className="s35-heading-icon"><Ic name="cal" /></span>My sessions.</h1>
         <p className="tt-p" style={{ marginTop: '5px' }}>
           Join, reschedule, cancel, confirm attendance and review — all from the server&apos;s own
           record of each session.
@@ -230,14 +225,17 @@ function SessionList({ go }: { go: Go }) {
       </div>
 
       {query.isPending && <LoadingState what="your sessions" />}
-      {query.isError && <TypedErrorState error={query.error} onRecover={() => query.refetch()} />}
+      {query.isError && <div className="s35-state-card s35-state-card--error"><TypedErrorState error={query.error} onRecover={() => query.refetch()} /></div>}
 
       {query.isSuccess && query.data.items.length === 0 && (
-        <EmptyState
-          title="Nothing here yet"
-          detail="When you book a mentor, the session appears here with its join, reschedule and cancel actions."
-          action={<Link className="tt-btn tt-btn--block" to="/s-31">Find a mentor</Link>}
-        />
+        <section className="s35-state-card">
+          <span className="s35-heading-icon"><Ic name="cal" /></span>
+          <div className="s35-state-copy" role="status">
+            <h2>Nothing here yet</h2>
+            <p>When you book a mentor, the session appears here with its join, reschedule and cancel actions.</p>
+          </div>
+          <Link className="tt-btn tt-btn--jade" to="/s-31"><Ic name="search" />Find a mentor</Link>
+        </section>
       )}
 
       {query.isSuccess && query.data.items.map((session) => (
@@ -316,11 +314,11 @@ function SessionDetailViews({
   if (query.isError) {
     return (
       <TutoringScreen screenId="S-35">
-        <TypedErrorState
+        <div className="s35-state-card s35-state-card--error"><TypedErrorState
           error={query.error}
           recoveryLabel="Back to my sessions"
           onRecover={() => go('list', '')}
-        />
+        /></div>
       </TutoringScreen>
     );
   }
@@ -341,11 +339,11 @@ function SessionHeading({ session }: { session: TutoringSession }) {
   return (
     <div>
       <Chip tone={LIVE_STATUSES.includes(session.status) ? 'g' : 'i'}>{session.status}</Chip>
-      <h1 className="tt-h tt-arrival" style={{ marginTop: '8px', fontSize: '19px' }}>
-        {labels.sessionZone}
+      <h1 className="tt-h tt-arrival">
+        <span className="s35-heading-icon"><Ic name="cal" /></span>Session details.
       </h1>
       <p className="tt-p" style={{ fontSize: '12.5px' }}>
-        {labels.sessionZoneLabel}
+        {labels.sessionZone} · {labels.sessionZoneLabel}
         {labels.readerZone && <> · your time {labels.readerZone} ({labels.readerZoneLabel})</>}
       </p>
     </div>
@@ -366,6 +364,12 @@ function ManageView({
   const [announceRegion, announce] = useAnnouncer();
   const queryClient = useQueryClient();
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const cancelErrorRegion = useRef<HTMLElement | null>(null);
+  const cancelFocusPending = useRef(false);
+  const dismissCancel = useCallback(() => {
+    cancelFocusPending.current = false;
+    setConfirmCancel(false);
+  }, []);
   const [cancelled, setCancelled] = useState<CancelResult | null>(null);
   const policy = policyPreview({ startUtcIso: session.startUtc, capturedPaise: 0 });
   const videoCapability = useVideoCapabilities();
@@ -379,18 +383,30 @@ function ManageView({
       expectedVersion: session.version,
     }),
     retry: tutoringRetry,
+    onError: () => setConfirmCancel(false),
     onSuccess: (result) => {
+      cancelFocusPending.current = false;
       setConfirmCancel(false);
       setCancelled(result);
       queryClient.setQueryData(tutoringKeys.session(session.id), result);
       announce(
         result.refund && result.refund.amountPaise > 0
-          ? `Session cancelled. ${formatPaise(result.refund.amountPaise)} is being refunded.`
-          : 'Session cancelled. No automatic refund applies at this notice.',
+          ? `Session cancelled. Refund assessed: ${formatPaise(result.refund.amountPaise)}. Settlement is not confirmed.`
+          : 'Session cancelled. Check the returned refund assessment.',
       );
       onDone();
     },
   });
+
+  // The modal cleanup first removes inert and restores its opener. Only this
+  // submitted cancellation may then hand focus to its newly exposed recovery.
+  // Dismissing the pending dialog clears ownership, so late errors cannot steal it.
+  useEffect(() => {
+    if (cancelMutation.isError && !confirmCancel && cancelFocusPending.current) {
+      cancelFocusPending.current = false;
+      cancelErrorRegion.current?.focus();
+    }
+  }, [cancelMutation.isError, confirmCancel]);
 
   const dock = (
     <Dock>
@@ -419,7 +435,7 @@ function ManageView({
         </button>
         <Link className="tt-btn" to={`/s-34?session=${encodeURIComponent(session.id)}`}>
           <Ic name="info" />
-          Receipt
+          Session confirmation
         </Link>
       </div>
     </Dock>
@@ -450,17 +466,9 @@ function ManageView({
         />
       ) : (
         <Banner
-          tone={policy.rescheduleFree ? 'info' : 'warn'}
-          title={
-            policy.rescheduleFree
-              ? `Free cancellation and reschedule for another ${Math.floor(policy.hoursBeforeStart - policy.policyWindowHours)} hours`
-              : 'Inside the notice window'
-          }
-          detail={
-            policy.rescheduleFree
-              ? `You are ${policy.hoursBeforeStart} hours before the start, which is outside the ${policy.policyWindowHours} hour window, so cancelling earns a full refund and rescheduling is free.`
-              : `You are ${policy.hoursBeforeStart} hours before the start, inside the ${policy.policyWindowHours} hour window. Cancelling now earns no automatic refund and a free reschedule is refused. An administrator can still review your case.`
-          }
+          tone="info"
+          title="Cancellation and rescheduling"
+          detail="The server applies the configured window when you submit a request. This session record does not include the current window or paid amount; no refund is promised before the server assessment."
         />
       )}
 
@@ -491,11 +499,13 @@ function ManageView({
       )}
 
       {cancelMutation.isError && (
-        <TypedErrorState
-          error={cancelMutation.error}
-          recoveryLabel="Reload this session"
-          onRecover={onDone}
-        />
+        <section className="s35-cancel-error" aria-label="Cancellation failed" ref={cancelErrorRegion} tabIndex={-1}>
+          <TypedErrorState
+            error={cancelMutation.error}
+            recoveryLabel="Reload this session"
+            onRecover={onDone}
+          />
+        </section>
       )}
 
       {!cancelled && !policy.started && (
@@ -515,22 +525,21 @@ function ManageView({
       </p>
 
       {confirmCancel && (
-        <Modal title="Cancel this session?" onDismiss={() => setConfirmCancel(false)}>
+        <Modal title="Cancel this session?" onDismiss={dismissCancel}>
           <p className="tt-p" style={{ fontSize: '13px' }}>
-            {policy.rescheduleFree
-              ? 'You are outside the notice window, so the server will assess a full refund of the captured amount. This cannot be undone.'
-              : 'You are inside the notice window, so no automatic refund applies. You may prefer to reschedule instead. This cannot be undone.'}
+            The server will assess eligibility and any refund under the configured window.
+            No refund amount or settlement is confirmed here. Cancellation cannot be undone.
           </p>
           <button
             type="button"
             className="tt-btn tt-btn--terra tt-btn--block"
             disabled={cancelMutation.isPending}
-            onClick={() => cancelMutation.mutate()}
+            onClick={() => { cancelFocusPending.current = true; cancelMutation.mutate(); }}
           >
             <Ic name="refund" />
             {cancelMutation.isPending ? 'Cancelling' : 'Yes, cancel and assess the refund'}
           </button>
-          <button type="button" className="tt-btn tt-btn--block" onClick={() => setConfirmCancel(false)}>
+          <button type="button" className="tt-btn tt-btn--block" onClick={dismissCancel}>
             <Ic name="close" />
             Keep my session
           </button>
@@ -548,40 +557,34 @@ function RefundOutcome({ result }: { result: CancelResult }) {
       <Banner
         tone="warn"
         title="Session cancelled, no refund recorded"
-        detail="The server cancelled the session and recorded no refund for it. Nothing further is needed from you."
+        detail="The server cancelled the session but returned no refund assessment. Refund eligibility and settlement are not confirmed."
       />
     );
   }
   const due = refund.amountPaise > 0;
-  const step = due ? 3 : 1;
   return (
     <>
       <Banner
         tone={due ? 'ok' : 'warn'}
-        title={due ? 'Cancelled with a refund' : 'Cancelled with no automatic refund'}
+        title={due ? 'Refund assessed; settlement not confirmed' : 'Cancelled: server refund assessment'}
         detail={
           due
             ? `The server assessed ${formatPaise(refund.amountPaise)} under the ${refund.policyWindowHours} hour policy, ${refund.hoursBeforeStart} hours before the start.`
-            : `At ${refund.hoursBeforeStart} hours before the start you were inside the ${refund.policyWindowHours} hour window, so no automatic refund applies. An administrator can still review this.`
+            : `The server assessed ${formatPaise(refund.amountPaise)} under its ${refund.policyWindowHours} hour policy. Decision: ${refund.decision}.`
         }
         code={refund.decision.toUpperCase()}
       />
       {due && (
         <div className="tt-amt">
-          <div className="tt-amt__eyebrow">Returning to you</div>
+          <div className="tt-amt__eyebrow">Assessed amount</div>
           <div className="tt-amt__big tt-mono">{formatPaise(refund.amountPaise)}</div>
           <div style={{ fontSize: '12.5px', color: 'var(--tt-ink2)', lineHeight: 1.5 }}>
-            Back to the instrument you paid with. Repeat requests return the same refund reference,
-            so you cannot be refunded twice.
+            The cancellation response does not provide settlement status. There is no student refund-status endpoint to poll.
           </div>
           <div className="tt-chiprow">
-            <Chip tone="g">No deduction</Chip>
             {result.refundId && <Chip tone="t">Reference recorded</Chip>}
           </div>
-          <div className="tt-prog" aria-label={`Refund progress: step ${step} of 5`}>
-            <span>Step {step} of 5</span>
-            {[1, 2, 3, 4, 5].map((i) => <i key={i} className={i <= step ? 'on' : ''} />)}
-          </div>
+
         </div>
       )}
       {result.refundId && (
@@ -617,7 +620,7 @@ function PolicyView({ session, go }: { session: TutoringSession; go: Go }) {
             onClick={() => go('reschedule')}
           >
             <Ic name="cal" />
-            {policy.rescheduleFree ? 'Reschedule free' : 'Try to reschedule'}
+            Try to reschedule
           </button>
           <button type="button" className="tt-btn tt-btn--block" onClick={() => go('manage')}>
             <Ic name="back" />
@@ -629,21 +632,9 @@ function PolicyView({ session, go }: { session: TutoringSession; go: Go }) {
       <SessionHeading session={session} />
       <h2 className="tt-h">What happens if you cancel now</h2>
       <Banner
-        tone={policy.rescheduleFree ? 'info' : 'warn'}
-        title={
-          policy.started
-            ? 'The start has passed, so cancellation is closed'
-            : policy.rescheduleFree
-              ? 'Outside the notice window'
-              : 'Inside the notice window'
-        }
-        detail={
-          policy.started
-            ? 'You can still go to attendance once the session ends.'
-            : policy.rescheduleFree
-              ? `At ${policy.hoursBeforeStart} hours before the start you are outside the ${policy.policyWindowHours} hour window, so the server assesses a full refund and a reschedule is free.`
-              : `At ${policy.hoursBeforeStart} hours before the start you are inside the ${policy.policyWindowHours} hour window. No automatic refund and no free reschedule. Only an audited administrator exception moves money inside the window.`
-        }
+        tone="info"
+        title={policy.started ? 'The scheduled start has passed' : 'Server-assessed cancellation'}
+        detail="The server applies the configured window and assesses any refund when you submit. The session GET response does not disclose the current window or paid amount."
       />
       {policy.started && (
         <p className="tt-p tt-muted" id="tt-resch-why">
@@ -652,17 +643,13 @@ function PolicyView({ session, go }: { session: TutoringSession; go: Go }) {
       )}
       <div className="tt-dis">
         <div className="tt-dis__body" style={{ paddingTop: '12px' }}>
-          <Kv label="Free cancellation window">
-            {policy.policyWindowHours} hours or more before the start
-          </Kv>
-          <Kv label="Boundary">Exactly {policy.policyWindowHours} hours is still free</Kv>
-          <Kv label="Inside the window">Audited administrator exception only</Kv>
-          <Kv label="Reschedule">Free outside the window, payment preserved</Kv>
+          <Kv label="Cancellation window">Configured window; not returned by this session record</Kv>
+          <Kv label="Refund">Assessment returned after server confirmation; settlement is separate</Kv>
+          <Kv label="Reschedule">The server checks the selected slot and current session version</Kv>
         </div>
       </div>
       <p className="tt-svr">
-        server-authoritative: the frozen policy computes every refund · this preview mirrors the
-        same rule and never decides it
+        Eligibility and refunds are determined by the server, not a local policy estimate.
       </p>
     </TutoringScreen>
   );
@@ -731,7 +718,7 @@ function RescheduleView({
     >
       {announceRegion}
       <SessionHeading session={session} />
-      <h2 className="tt-h">Choose a new time</h2>
+      <h2 className="tt-h s35-section-heading"><span className="s35-heading-icon"><Ic name="cal" /></span>Choose a new time</h2>
       <p className="tt-p">
         Times are shown in {session.ianaTimezone}, the zone kept with your session. Your payment
         moves with you and nothing is charged again.
@@ -1021,173 +1008,8 @@ function AttendanceView({
 
 /* -------------------------------- review --------------------------------- */
 
-function ReviewView({ session, go }: { session: TutoringSession; go: Go }) {
-  const [announceRegion, announce] = useAnnouncer();
-  const [rating, setRating] = useState(0);
-  const [body, setBody] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-  const attendanceConfirmed = session.attendanceState === 'confirmed';
-
-  const validation = validateReview(rating || undefined, body);
-  const mutation = useMutation({
-    mutationFn: () => createReview({
-      sessionId: session.id,
-      rating,
-      ...(body.trim() ? { body: body.trim() } : {}),
-    }),
-    retry: tutoringRetry,
-    onSuccess: () => {
-      setSubmitted(true);
-      announce('Your review was submitted and is now with moderation.');
-    },
-  });
-
-  const blocked = mutation.error instanceof TutoringApiError
-    && mutation.error.code === REVIEW_BLOCKED;
-
-  if (submitted) {
-    return (
-      <TutoringScreen
-        screenId="S-35"
-        dock={
-          <Dock>
-            <button type="button" className="tt-btn tt-btn--jade tt-btn--block" onClick={() => go('manage')}>
-              <Ic name="back" />
-              Back to the session
-            </button>
-          </Dock>
-        }
-      >
-        {announceRegion}
-        <SessionHeading session={session} />
-        <Banner
-          tone="ok"
-          title="Thank you, your review was submitted"
-          detail="It goes to moderation before it appears on the mentor profile, so it is not counted in the public average yet."
-        />
-      </TutoringScreen>
-    );
-  }
-
-  return (
-    <TutoringScreen
-      screenId="S-35"
-      dock={
-        <Dock>
-          <button
-            type="button"
-            className="tt-btn tt-btn--jade tt-btn--block"
-            disabled={!attendanceConfirmed || !validation.ok || mutation.isPending}
-            aria-disabled={!attendanceConfirmed || !validation.ok || mutation.isPending}
-            aria-describedby="tt-review-why"
-            onClick={() => mutation.mutate()}
-          >
-            <Ic name="star" />
-            {mutation.isPending ? 'Submitting' : 'Submit review'}
-          </button>
-          <button type="button" className="tt-btn tt-btn--block" onClick={() => go('manage')}>
-            <Ic name="back" />
-            Back to the session
-          </button>
-        </Dock>
-      }
-    >
-      {announceRegion}
-      <SessionHeading session={session} />
-
-      {!attendanceConfirmed && (
-        <Banner
-          tone="warn"
-          title="Reviewing is locked until attendance is confirmed"
-          detail={
-            session.attendanceState === 'disputed'
-              ? 'Your dispute is still open, so reviewing stays closed until an administrator resolves it.'
-              : 'A review needs a confirmed attendance record. Confirm attendance first and come straight back.'
-          }
-          code={REVIEW_BLOCKED}
-        />
-      )}
-      {!attendanceConfirmed && (
-        <button type="button" className="tt-btn tt-btn--block" onClick={() => go('attendance')}>
-          <Ic name="check" />
-          Go to attendance
-        </button>
-      )}
-
-      <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
-        <legend className="tt-h" style={{ fontSize: '13px', fontWeight: 800, padding: '0 0 8px' }}>
-          Your rating, 1 to {REVIEW_MAX_RATING} stars
-        </legend>
-        <div className="tt-stars" role="radiogroup" aria-label={`Rating out of ${REVIEW_MAX_RATING}`}>
-          {[1, 2, 3, 4, 5].map((value) => (
-            <label key={value} className="tt-star" data-on={value <= rating ? '1' : '0'}>
-              <input
-                className="tt-sr"
-                type="radio"
-                name="tt-rating"
-                value={value}
-                checked={rating === value}
-                onChange={() => setRating(value)}
-              />
-              <span className="tt-sr">{value} star{value === 1 ? '' : 's'}</span>
-              <Ic name="star" />
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <div className="tt-fld">
-        <label htmlFor="tt-review-body">
-          What was useful? Optional, and {REVIEW_MIN_BODY} to {REVIEW_MAX_BODY} characters if you write one
-        </label>
-        <textarea
-          id="tt-review-body"
-          className="tt-in"
-          rows={5}
-          maxLength={REVIEW_MAX_BODY}
-          value={body}
-          aria-describedby="tt-review-count"
-          aria-invalid={validation.codes.includes('REVIEW_TEXT_TOO_SHORT') || undefined}
-          onChange={(event) => setBody(event.target.value)}
-          style={{ minHeight: '110px' }}
-        />
-        <span className="tt-muted" id="tt-review-count" aria-live="polite">
-          {validation.length} of {REVIEW_MAX_BODY} characters
-          {validation.codes.includes('REVIEW_TEXT_TOO_SHORT')
-            && ` · at least ${REVIEW_MIN_BODY} needed`}
-        </span>
-      </div>
-
-      <p className="tt-p tt-muted" id="tt-review-why">
-        {!attendanceConfirmed
-          ? 'Submitting is unavailable because attendance is not confirmed.'
-          : validation.codes.includes('REVIEW_RATING_OUT_OF_RANGE')
-            ? 'Choose a rating between 1 and 5 stars to submit.'
-            : validation.codes.includes('REVIEW_TEXT_TOO_SHORT')
-              ? `Your text needs at least ${REVIEW_MIN_BODY} characters, or leave it empty.`
-              : 'Ready to submit. The server checks these limits again and its verdict is final.'}
-      </p>
-
-      {mutation.isError && (
-        <TypedErrorState
-          error={mutation.error}
-          recoveryLabel={blocked ? 'Go to attendance' : undefined}
-          onRecover={blocked ? () => go('attendance') : undefined}
-        />
-      )}
-
-      <Banner
-        tone="info"
-        title="Reviews are moderated"
-        detail="Do not include the names of other people, case numbers, or anything you would not want published."
-      />
-
-      <p className="tt-svr">
-        server-authoritative: review eligibility, the 1 to 5 and {REVIEW_MIN_BODY} to
-        {' '}{REVIEW_MAX_BODY} limits, moderation and the public aggregate
-      </p>
-    </TutoringScreen>
-  );
+function ReviewView({session,go}:{session:TutoringSession;go:Go}){
+ return <TutoringScreen screenId="S-35"><SessionHeading session={session}/><S35Review key={session.id} session={session}/><button className="tt-btn" onClick={()=>go('manage')}>Back to the session</button></TutoringScreen>;
 }
 
 /* ------------------------- pre-join / device check ------------------------ */
@@ -1434,8 +1256,8 @@ function PreJoinView({ session, go }: { session: TutoringSession; go: Go }) {
       {announceRegion}
       <div>
         <div className="tt-eyebrow">Before you enter</div>
-        <h1 className="tt-h tt-arrival" style={{ marginTop: '4px', fontSize: '19px' }}>
-          Room entry check
+        <h1 className="tt-h tt-arrival">
+          <span className="s35-heading-icon"><Ic name="cal" /></span>Room entry check
         </h1>
         <p className="tt-p" style={{ fontSize: '12.5px' }}>
           {labels.sessionZone} · {labels.sessionZoneLabel}
@@ -1987,7 +1809,7 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
     <TutoringScreen screenId="S-35" bare>
       {announceRegion}
       <div className="tt-live-host">
-        <main className="tt-live" data-family="room" data-tt-transport={roomState}>
+        <section aria-label="Live mentoring session" className="tt-live" data-family="room" data-tt-transport={roomState}>
           <div className="tt-lh">
             {/*
               ADMISSION and TRANSPORT are two different facts and are reported
@@ -2001,7 +1823,7 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
             <Chip tone={issueError ? 'r' : flowing ? 'g' : credential ? 'i' : 'i'}>
               {issueError ? 'Not admitted' : flowing ? 'In the room' : credential ? 'Entry authorised' : 'Joining'}
             </Chip>
-            <span className="t">Mentoring session</span>
+            <h1 className="t">Mentoring session</h1>
             <span className="tt-grow" />
             <span className="m">{clock}</span>
             <button
@@ -2338,7 +2160,7 @@ function LiveRoom({ sessionId, go }: { sessionId: string; go: Go }) {
               </button>
             </Modal>
           )}
-        </main>
+        </section>
       </div>
     </TutoringScreen>
   );
