@@ -1,3 +1,5 @@
+import {S35Review} from './S35Review';
+import {S35Frame as TutoringScreen} from './S35Frame';
 /**
  * S-35 `tutoring/session` (SAATHI-66, matrix D1-D5, E1, F1-F3, I1, I2).
  *
@@ -46,11 +48,9 @@ import {
 } from '../lib/useStudentMutation';
 import {
   ATTENDANCE_DISPUTE_REASON_CODES,
-  REVIEW_BLOCKED,
   TutoringApiError,
   cancelSession,
   confirmAttendance,
-  createReview,
   disputeAttendance,
   getAvailability,
   getTutoringCapabilities,
@@ -70,15 +70,11 @@ import {
   type TutoringCapabilities,
 } from '../lib/tutoringApi';
 import {
-  REVIEW_MAX_BODY,
-  REVIEW_MAX_RATING,
-  REVIEW_MIN_BODY,
   browserTimeZone,
   durationMinutes,
   formatPaise,
   policyPreview,
   slotTimeLabels,
-  validateReview,
 } from '../lib/tutoringRules';
 import {
   clearPreferredDevices,
@@ -109,7 +105,6 @@ import {
   Kv,
   LoadingState,
   Modal,
-  TutoringScreen,
   TypedErrorState,
   useAnnouncer,
   useRouteArrival,
@@ -205,7 +200,7 @@ function SessionList({ go }: { go: Go }) {
     <TutoringScreen screenId="S-35">
       <div>
         <div className="tt-eyebrow">Your chambers diary</div>
-        <h1 className="tt-h tt-arrival">Sessions</h1>
+        <h1 className="tt-h tt-arrival">My sessions.</h1>
         <p className="tt-p" style={{ marginTop: '5px' }}>
           Join, reschedule, cancel, confirm attendance and review — all from the server&apos;s own
           record of each session.
@@ -990,173 +985,8 @@ function AttendanceView({
 
 /* -------------------------------- review --------------------------------- */
 
-function ReviewView({ session, go }: { session: TutoringSession; go: Go }) {
-  const [announceRegion, announce] = useAnnouncer();
-  const [rating, setRating] = useState(0);
-  const [body, setBody] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-  const attendanceConfirmed = session.attendanceState === 'confirmed';
-
-  const validation = validateReview(rating || undefined, body);
-  const mutation = useMutation({
-    mutationFn: () => createReview({
-      sessionId: session.id,
-      rating,
-      ...(body.trim() ? { body: body.trim() } : {}),
-    }),
-    retry: tutoringRetry,
-    onSuccess: () => {
-      setSubmitted(true);
-      announce('Your review was submitted and is now with moderation.');
-    },
-  });
-
-  const blocked = mutation.error instanceof TutoringApiError
-    && mutation.error.code === REVIEW_BLOCKED;
-
-  if (submitted) {
-    return (
-      <TutoringScreen
-        screenId="S-35"
-        dock={
-          <Dock>
-            <button type="button" className="tt-btn tt-btn--jade tt-btn--block" onClick={() => go('manage')}>
-              <Ic name="back" />
-              Back to the session
-            </button>
-          </Dock>
-        }
-      >
-        {announceRegion}
-        <SessionHeading session={session} />
-        <Banner
-          tone="ok"
-          title="Thank you, your review was submitted"
-          detail="It goes to moderation before it appears on the mentor profile, so it is not counted in the public average yet."
-        />
-      </TutoringScreen>
-    );
-  }
-
-  return (
-    <TutoringScreen
-      screenId="S-35"
-      dock={
-        <Dock>
-          <button
-            type="button"
-            className="tt-btn tt-btn--jade tt-btn--block"
-            disabled={!attendanceConfirmed || !validation.ok || mutation.isPending}
-            aria-disabled={!attendanceConfirmed || !validation.ok || mutation.isPending}
-            aria-describedby="tt-review-why"
-            onClick={() => mutation.mutate()}
-          >
-            <Ic name="star" />
-            {mutation.isPending ? 'Submitting' : 'Submit review'}
-          </button>
-          <button type="button" className="tt-btn tt-btn--block" onClick={() => go('manage')}>
-            <Ic name="back" />
-            Back to the session
-          </button>
-        </Dock>
-      }
-    >
-      {announceRegion}
-      <SessionHeading session={session} />
-
-      {!attendanceConfirmed && (
-        <Banner
-          tone="warn"
-          title="Reviewing is locked until attendance is confirmed"
-          detail={
-            session.attendanceState === 'disputed'
-              ? 'Your dispute is still open, so reviewing stays closed until an administrator resolves it.'
-              : 'A review needs a confirmed attendance record. Confirm attendance first and come straight back.'
-          }
-          code={REVIEW_BLOCKED}
-        />
-      )}
-      {!attendanceConfirmed && (
-        <button type="button" className="tt-btn tt-btn--block" onClick={() => go('attendance')}>
-          <Ic name="check" />
-          Go to attendance
-        </button>
-      )}
-
-      <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
-        <legend className="tt-h" style={{ fontSize: '13px', fontWeight: 800, padding: '0 0 8px' }}>
-          Your rating, 1 to {REVIEW_MAX_RATING} stars
-        </legend>
-        <div className="tt-stars" role="radiogroup" aria-label={`Rating out of ${REVIEW_MAX_RATING}`}>
-          {[1, 2, 3, 4, 5].map((value) => (
-            <label key={value} className="tt-star" data-on={value <= rating ? '1' : '0'}>
-              <input
-                className="tt-sr"
-                type="radio"
-                name="tt-rating"
-                value={value}
-                checked={rating === value}
-                onChange={() => setRating(value)}
-              />
-              <span className="tt-sr">{value} star{value === 1 ? '' : 's'}</span>
-              <Ic name="star" />
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <div className="tt-fld">
-        <label htmlFor="tt-review-body">
-          What was useful? Optional, and {REVIEW_MIN_BODY} to {REVIEW_MAX_BODY} characters if you write one
-        </label>
-        <textarea
-          id="tt-review-body"
-          className="tt-in"
-          rows={5}
-          maxLength={REVIEW_MAX_BODY}
-          value={body}
-          aria-describedby="tt-review-count"
-          aria-invalid={validation.codes.includes('REVIEW_TEXT_TOO_SHORT') || undefined}
-          onChange={(event) => setBody(event.target.value)}
-          style={{ minHeight: '110px' }}
-        />
-        <span className="tt-muted" id="tt-review-count" aria-live="polite">
-          {validation.length} of {REVIEW_MAX_BODY} characters
-          {validation.codes.includes('REVIEW_TEXT_TOO_SHORT')
-            && ` · at least ${REVIEW_MIN_BODY} needed`}
-        </span>
-      </div>
-
-      <p className="tt-p tt-muted" id="tt-review-why">
-        {!attendanceConfirmed
-          ? 'Submitting is unavailable because attendance is not confirmed.'
-          : validation.codes.includes('REVIEW_RATING_OUT_OF_RANGE')
-            ? 'Choose a rating between 1 and 5 stars to submit.'
-            : validation.codes.includes('REVIEW_TEXT_TOO_SHORT')
-              ? `Your text needs at least ${REVIEW_MIN_BODY} characters, or leave it empty.`
-              : 'Ready to submit. The server checks these limits again and its verdict is final.'}
-      </p>
-
-      {mutation.isError && (
-        <TypedErrorState
-          error={mutation.error}
-          recoveryLabel={blocked ? 'Go to attendance' : undefined}
-          onRecover={blocked ? () => go('attendance') : undefined}
-        />
-      )}
-
-      <Banner
-        tone="info"
-        title="Reviews are moderated"
-        detail="Do not include the names of other people, case numbers, or anything you would not want published."
-      />
-
-      <p className="tt-svr">
-        server-authoritative: review eligibility, the 1 to 5 and {REVIEW_MIN_BODY} to
-        {' '}{REVIEW_MAX_BODY} limits, moderation and the public aggregate
-      </p>
-    </TutoringScreen>
-  );
+function ReviewView({session,go}:{session:TutoringSession;go:Go}){
+ return <TutoringScreen screenId="S-35"><SessionHeading session={session}/><S35Review key={session.id} session={session}/><button className="tt-btn" onClick={()=>go('manage')}>Back to the session</button></TutoringScreen>;
 }
 
 /* ------------------------- pre-join / device check ------------------------ */
