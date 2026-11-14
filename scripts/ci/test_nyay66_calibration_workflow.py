@@ -31,7 +31,7 @@ class CalibrationWorkflowContracts(unittest.TestCase):
 
     def test_s18_option_is_trusted_control_capture_only_and_preserves_old_options(self):
         workflow = self.workflow()
-        self.assertEqual(workflow["on"]["workflow_dispatch"]["inputs"]["reference"]["options"], ["r2", "revl", "s18-v32108", "s19-v32108", "s20-v32108", "s21-v32108", "s25-v32108", "s26-v32108", "s27-v32108", "s28-v32108", "s29-v32108", "s30-v32108", "s31-v32108", "s32-v32108", "s33-v32108", "s34-v32108"])
+        self.assertEqual(workflow["on"]["workflow_dispatch"]["inputs"]["reference"]["options"], ["r2", "revl", "s18-v32108", "s19-v32108", "s20-v32108", "s21-v32108", "s25-v32108", "s26-v32108", "s27-v32108", "s28-v32108", "s29-v32108", "s30-v32108", "s31-v32108", "s32-v32108", "s33-v32108", "s34-v32108", "s35-v32108"])
         steps = workflow["jobs"]["calibrate"]["steps"]
         validation = next(step for step in steps if step.get("name") == "Validate exact source selection")
         self.assertIn('"$REFERENCE" = s18-v32108', validation["run"])
@@ -71,6 +71,16 @@ class CalibrationWorkflowContracts(unittest.TestCase):
         self.assertNotIn('node scripts/nyay66-s21-calibrate.mjs', capture["run"])
         self.assertNotIn('nyay66-s21-import', capture["run"])
         self.assertNotIn('s21-product', capture["run"])
+
+    def test_s35_option_executes_only_reviewed_control_capture_code(self):
+        steps = self.workflow()["jobs"]["calibrate"]["steps"]
+        validation = next(step for step in steps if step.get("name") == "Validate exact source selection")
+        capture = next(step for step in steps if step.get("name") == "Generate reference artifacts only")
+        self.assertIn('"$REFERENCE" = s35-v32108', validation["run"])
+        self.assertIn('node ../../control/frontend/scripts/nyay66-s35-calibrate.mjs "$NYAY66_OUTPUT"', capture["run"])
+        self.assertNotIn('node scripts/nyay66-s35-calibrate.mjs', capture["run"])
+        self.assertNotIn('nyay66-s35-import', capture["run"])
+        self.assertNotIn('s35-product', capture["run"])
 
     def test_owner_dispatch_and_rerun_actor_matrix(self):
         # Interpret the workflow's actual conjunction, not a duplicated predicate.

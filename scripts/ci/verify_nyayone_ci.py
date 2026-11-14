@@ -4127,7 +4127,7 @@ def _duplicate_mapping_keys(text: str) -> list[str]:
 def check_workflow(path: Path) -> list[str]:
     if path.name == "nyay66-calibration.yml":
         # Owner-approved manual-only artifact generator; no required context.
-        expected = "fe6f0a22b573c2c32d0b1207a5d99be8fd0a25880a990125db2241574e23dae1"
+        expected = "bd3a267530188bcb335a09c7480b372f15efc821d502b7afed99af1a7e1b9437"
         return [] if hashlib.sha256(path.read_bytes()).hexdigest() == expected else [
             f"{path}: NYAY-66 manual calibration differs from its artifact-only contract"
         ]
